@@ -1,0 +1,11 @@
+{{ Toc( position='relative', float='right' ) }}
+
+h3. 0.1dev ``{i} on Fri 2011-03-15``
+
+-----
+
+{{{ Nested 
+@ { 'font-size' : 'small', 'color' : 'gray' }
+Document edited using Vim \\ 
+/* vim: set filetype=etx : */
+}}}

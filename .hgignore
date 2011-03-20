@@ -1,0 +1,16 @@
+# use glob syntax.
+syntax: glob
+*.pyc
+*.swp
+*~
+pluggd-env
+.vim_maindev
+.vim_templates
+yacctab.py
+lextab.py
+bootstrap.egg-info/
+./build/
+./dist/
+# switch to regexp syntax.
+syntax: regexp
+^\.pc/
