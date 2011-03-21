@@ -10,8 +10,7 @@ standard library.
 
 
 # TODO :
-#   1. Replace `CouchPy` with package name for user_agent
-#   2. Document this module
+#   1. Document this module
 
 import sys
 import socket
@@ -82,7 +81,7 @@ class HttpSession( object ) :
 
     def __init__( self, cache=None, timeout=None, max_redirects=5,
                   retry_delays=[0], retryable_errors=RETRYABLE_ERRORS,
-                  user_agent='CouchPy' ) :
+                  user_agent='couchpy' ) :
         """Initialize an HTTP client session.
         cache
             an instance with a dict-like interface or None to allow

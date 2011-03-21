@@ -312,6 +312,9 @@ class Document( object ) :
         reserved = [ '_id', '_rev' ]
         if key in reserved return None
         val, _ = ( self.doc.pop(key, None), self.update() )
+        conn, paths = self.conn, self.paths
+        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
+        self.doc.update({ '_rev' : d['rev'] }) if d else None
         return val
 
         s, h, d = _updatedoc( self.conn, self.doc, self.paths )

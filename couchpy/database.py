@@ -7,14 +7,30 @@ from   httpc        import HttpSession, ResourceNotFound, OK, CREATED
 from   client       import Client
 from   doc          import Document
 
-# TODO :
-#   1. _changes 'longpoll' and 'continuous' modes are not yet supported.
-#   2. The 'skip' option should only be used with small values, as skipping a
+
+# GOTCHA :
+#   1. The 'skip' option should only be used with small values, as skipping a
 #      large range of documents this way is inefficient
+#
+# TODO :
+#   1. _changes, 'longpoll' and 'continuous' modes are not yet supported.
+#   2. _bulk_docs, needs to be updated.
 #   3. _missing_revs API to be implemented
 #   4. _revs_diff API to be implemented
+#   5. _security API to be implemented
+#   6. Should we provide attachment facilities for local docs ?
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
+
+def _db( conn, paths=[], hthdrs={} ) :
+    """GET /<db>"""
+    hthdrs = deepcopy( hthdrs )
+    hthdrs.update( hdr_acceptjs )
+    s, h, d = conn.get( paths, hthdrs, None )
+    if s == OK :
+        return s, h, d
+    else :
+        return (None, None, None)
 
 def _createdb( conn, paths=[], hthdrs={} ) :
     """PUT /<db>"""
@@ -36,55 +52,14 @@ def _deletedb( conn, paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _db( conn, paths=[], hthdrs={} ) :
-    """GET /<db>"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        return (None, None, None)
-
-def _all_docs( conn, keys=[], paths=[], hthdrs={}, **query ) :
-    # query descending=<bool>   endkey=<key>        endkey_docid=<id>
-    #       group=<bool>        group_level=<num>   include_docs=<bool>
-    #       key=<key>           limit=<num>         inclusive_end=<bool>
-    #       reduce=<bool>       skip=<num>          stale='ok'
-    #       startkey=<key>      startkey_docid=<id> update_seq=<bool>
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    if keys :
-        body = rest.data2json({ 'keys' : keys })
-        s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
-    else :
-        s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
-    if s == OK :
-        return s, h, d
-    else :
-        return (None, None, None)
-    
-
-def _bulk_docs( conn, docs, paths=[], atomic=False, hthdrs={} ) :
-    docs = {
-        'all_or_nothing' : atomic,
-        'docs' : docs,
-    }
-    body = rest.data2json( docs )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    s, h, d = conn.post( paths, hthdrs, body )
-    if s == OK :
-        return s, h, d
-    else :
-        return (None, None, None)
-
 def _changes( conn, paths=[], hthdrs={}, **query ) :
-    """GET /<db>/_changes"""
-    # query feed=normal | continuous | longpoll
-    #       filter=<design-doc>/<func-name>     heartbeat=<milliseconds>
-    #       include_docs=<bool>                 limit=<number>
-    #       since=<seq-num>                     timeout=<millisecond>
+    """GET /<db>/_changes
+    query,
+        feed=normal | continuous | longpoll
+        filter=<design-doc>/<func-name>     heartbeat=<milliseconds>
+        include_docs=<bool>                 limit=<number>
+        since=<seq-num>                     timeout=<millisecond>
+    """
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
@@ -93,10 +68,19 @@ def _changes( conn, paths=[], hthdrs={}, **query ) :
     else :
         return (None, None, None)
 
-# This following bedlump function also handles _compact/design-doc API
 def _compact( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_compact;
        POST /<db>/_compact>/<designdoc>"""
+    hthdrs = deepcopy( hthdrs )
+    hthdrs.update( hdr_acceptjs )
+    s, h, d = conn.post( paths, hthdrs, None )
+    if s == OK and d["ok"] == True :
+        return s, h, d
+    else :
+        return (None, None, None)
+
+def _view_cleanup( conn, paths=[], hthdrs={} ) :
+    """POST /<db>/_view_cleanup"""
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     s, h, d = conn.post( paths, hthdrs, None )
@@ -115,17 +99,37 @@ def _ensure_full_commit( conn, paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
+def _bulk_docs( conn, docs, atomic=False, paths=[], hthdrs={} ) :
+    """POST /<db>/_bulk_docs"""
+    docs = {
+        'all_or_nothing' : atomic,
+        'docs' : docs,
+    }
+    body = rest.data2json( docs )
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
-    body = rest.data2json( revs )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
         return (None, None, None)
 
+def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
+    """POST /<db>/_temp_view
+    query,
+        Same query parameters as that of design-doc views
+    """
+    hthdrs = deepcopy( hthdrs )
+    hthdrs.update( hdr_acceptjs )
+    body = rest.data2json( designdoc )
+    s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
+    if s == OK :
+        return s, h, d
+    else :
+        return (None, None, None)
+
 def _purge( conn, body, paths=[], hthdrs={} ) :
+    """POST /<db>/_purge"""
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     body = rest.data2json( body )
@@ -135,7 +139,31 @@ def _purge( conn, body, paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
+def _all_docs( conn, keys=None, paths=[], hthdrs={}, **query ) :
+    """
+    GET  /<db>/_all_docs,     if keys is None
+    POST /<db>/_all_docs,    if keys is a list of document keys to select
+    query for GET,
+        descending=<bool>   endkey=<key>        endkey_docid=<id>
+        group=<bool>        group_level=<num>   include_docs=<bool>
+        key=<key>           limit=<num>         inclusive_end=<bool>
+        reduce=<bool>       skip=<num>          stale='ok'
+        startkey=<key>      startkey_docid=<id> update_seq=<bool>
+    """
+    hthdrs = deepcopy( hthdrs )
+    hthdrs.update( hdr_acceptjs )
+    if keys == None :
+        s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
+    else :
+        body = rest.data2json({ 'keys' : keys })
+        s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
+    if s == OK :
+        return s, h, d
+    else :
+        return (None, None, None)
+
+def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
+    """TODO : To be implemented"""
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     body = rest.data2json( revs )
@@ -145,18 +173,19 @@ def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
+def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
+    """TODO : To be implemented"""
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
-    body = '%s' % limit if limit != None else None
-    s, h, d = conn.put( paths, hthdrs, body
-              ) if limit != None else conn.get( paths, hthdrs, body )
+    body = rest.data2json( revs )
+    s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
         return (None, None, None)
 
 def _security( conn, paths=[], security=None, hthdrs={} ) :
+    """TODO : To be implemented"""
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     body = rest.data2json( security ) if security else None
@@ -167,36 +196,34 @@ def _security( conn, paths=[], security=None, hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
-    # TODO : Same query parameters as that of design-doc views
+def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
+    """
+    GET /<db>/_revs_limit       if limit is None
+    PUT /<db>/_revs_limit       if limit is an integer value
+    """
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
-    body = rest.data2json( designdoc )
-    s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
+    body = '%s' % limit if limit != None else None
+    if limit == None :
+        s, h, d = conn.get( paths, hthdrs, body )
+    else :
+        s, h, d = conn.put( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
         return (None, None, None)
 
-def _view_cleanup( conn, paths=[], hthdrs={} ) :
-    """POST /<db>/_view_cleanup"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    s, h, d = conn.post( paths, hthdrs, None )
-    if s == OK and d["ok"] == True :
-        return s, h, d
-    else :
-        return (None, None, None)
+
 
 class Database( object ) :
 
     def __init__( self, client, dbname, **kwargs ) :
         """Interface with database `dbname`"""
-        self.dbname = Database.validate_dbname( dbname )
         self.client = client
-        self.conn = client.conn
+        self.dbname = Database.validate_dbname( dbname )
         self.debug = kwargs.pop( 'debug', client.debug )
 
+        self.conn = client.conn
         self.paths = [ dbname ]
         self.info = {}
 
@@ -215,15 +242,15 @@ class Database( object ) :
     def __iter__( self ) :
         """Return the IDs of all documents in the database."""
         d = self.docs()
-        return iter( map( lambda x : x["id"], d['rows'] ))
+        return iter( map( lambda x : x['id'], d['rows'] ))
 
     def __getitem__( self, key ) :
-        """Fetch the document specified by `key` and return a corresponding
-        Document object
+        """Fetch the latest revision of the document specified by `key` and
+        return a corresponding Document object
         """
         return Document( self, key )
 
-    def __len__(self):
+    def __len__(self) :
         """Return the number of documents in the database."""
         d = self.docs()
         return d['total_rows']
@@ -294,8 +321,7 @@ class Database( object ) :
         Admin-prev
             No
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_changes' )
+        conn, paths = self.conn, ( self.paths + ['_changes'] )
         s, h, d = _changes( conn, paths, hthdrs=hthdrs, **query )
         return d
 
@@ -323,8 +349,10 @@ class Database( object ) :
         Admin-prev
             No
         """
-        conn, paths = self.conn, self.paths
-        paths = ['_compact'] if designdoc == None else ['_compact',designdoc]
+        conn, paths = ( self.conn, (self.paths + ['_compact']) 
+                      ) if designdoc == None else ( 
+                        self.conn, (self.paths + ['_compact',designdoc])
+                      )
         s, h, d = _compact( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -336,8 +364,7 @@ class Database( object ) :
         Admin-prev,
             Yes
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_view_cleanup' )
+        conn, paths = self.conn, (self.paths + ['_view_cleanup'])
         s, h, d = _view_cleanup( conn, paths, hthdrs=hthdrs )
         return None
 
@@ -351,8 +378,7 @@ class Database( object ) :
         Admin-prev
             No
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_ensure_full_commit' )
+        conn, paths = self.conn, (self.paths + ['_ensure_full_commit'])
         s, h, d = _ensure_full_commit( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -365,8 +391,8 @@ class Database( object ) :
         existing documents, you must provide the document ID, revision
         information, and new document values.
         You can optionally delete documents during a bulk update by adding the
-        `_deleted` field with a value of true to each docment ID/
-        revision combination within the submitted JSON structure.
+        `_deleted` field with a value of true to each docment ID/revision
+        combination within the submitted JSON structure.
 
         Return,
             JSON converted object as returned by CouchDB. It depends on
@@ -375,10 +401,8 @@ class Database( object ) :
         Admin-prev,
             No
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_bulk_docs' )
-        s, h, d = _bulk_docs( conn, docs, paths, atomic=atomic,
-                              hthdrs=hthdrs )
+        conn, paths = self.conn, (self.paths + ['_bulk_docs'])
+        s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths, hthdrs=hthdrs )
         return d
 
     def tempview( self, designdoc, hthdrs={}, **query ) :
@@ -393,10 +417,8 @@ class Database( object ) :
         Admin-prev,
             Yes
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_temp_view' )
-        s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs,
-                              **query )
+        conn, paths = self.conn, (self.paths + ['_temp_view'])
+        s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
         return d
 
     def purge( self, doc, revs=None, hthdrs={} ) :
@@ -419,8 +441,7 @@ class Database( object ) :
         Admin-prev
             No
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_purge' )
+        conn, paths = self.conn, (self.paths + ['_purge'])
         if isinstance(doc, dict) :
             body = rest.data2json(doc)
         else :
@@ -437,10 +458,10 @@ class Database( object ) :
         and basic contents, consisting the ID, revision and key. The key is
         generated from the document ID.
 
-        If optional key-word argument `keys` is passes, specifying a list
+        If optional key-word argument `keys` is passes, specifying a list of
         document ids, only those documents will be fetched and returned.
 
-        query parameters,
+        query parameters, if keys=None
         descending,
             Return the documents in descending by key order.
         endkey,
@@ -478,39 +499,27 @@ class Database( object ) :
         Admin-prev
             No
         """
-        conn, paths = self.conn, self.paths
-        paths.append( '_all_docs' )
+        conn, paths = self.conn, (self.paths + ['_all_docs'])
         s, h, d = _all_docs( conn, keys=keys, paths, hthdrs=hthdrs, **query )
         return d
 
     def missingrevs( self ) :
-        """Not fully defined.
-        """
+        """TODO : To be implemented"""
 
     def revsdiff( self ) :
-        """Not fully defined.
-        """
+        """TODO : To be implemented"""
 
     def security( self, obj=None, hthdrs={} ) :
-        """Get or Set the current security object.
-        If `obj` is specified the security object will be updated. Else, the
-        current security object will be returned
-        """
-        conn, paths = self.conn, self.paths
-        paths.append( '_security' )
-        s, h, d = _security( conn, paths, security=obj, hthdrs=hthdrs )
-        return d
+        """TODO : To be implemented"""
 
     def revslimit( self, limit=None, hthdrs={} ) :
-        """Gets or Set the current revs_limit (revision limit) for database.
-        """
-        conn, paths = self.conn, self.paths
-        paths.append( '_revs_limit' )
+        """Gets or Set the current revs_limit (revision limit) for database."""
+        conn, paths = self.conn, (self.paths + ['_revs_limit'])
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
 
     def createdoc( self, docs=[], filepaths=[], hthdrs={}, **query ) :
-        """Create a one or more document in this database. Optionally provide
+        """Create one or more document in this database. Optionally provide
         a list of file-paths to be added as attachments to the document, HTTP
         headers, and query parameters,
 
@@ -524,12 +533,12 @@ class Database( object ) :
         Admin-prev,
             No
         """
+        h, q, f = hthdrs, query, filepaths
         if isinstance(docs, (list, tuple)) :
-            return [ Document.create( self, doc, hthdrs=hthdrs, **query )
-                     for doc in docs ]
+             r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
         else :
-            return Document.create( self, docs, attachfiles=filepaths,
-                                    hthdrs=hthdrs, **query )
+             r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
+        return r
 
     def deletedoc( self, docs=[], rev=None, hthdrs={} ) :
         """Deletes one or more documents from the database, and all the
@@ -543,11 +552,52 @@ class Database( object ) :
         Admin-Prev,
             No
         """
+        h = hthdrs
         if isinstance(docs, (list, tuple)) :
-            [ Document.delete( self, doc, hthdrs=hthdrs, rev=rev 
-              ) for doc, rev in docs ]
+            [Document.delete(self, doc, hthdrs=h, rev=rev) for doc,rev in docs]
         else :
-            Document.delete( self, docs, hthdrs=hthdrs, rev=rev )
+            Document.delete( self, docs, hthdrs=h, rev=rev )
+        return None
+
+    def createlocaldoc( self, docs=[], hthdrs={}, **query ) :
+        """Create one or more local document in this database. Optionally
+        provide HTTP headers, and query parameters,
+
+        query parameters,
+        batch,
+            if specified 'ok', allow document store request to be batched with
+            other
+
+        Return,
+            Document object
+        Admin-prev,
+            No
+        """
+        h, q = hthdrs, query
+        if isinstance(docs, (list, tuple)) :
+             r = [ LocalDocument.create(self, doc, hthdrs=h, **q) for doc in docs ]
+        else :
+             r = LocalDocument.create( self, docs, hthdrs=h, **q )
+        return r
+
+    def deletelocaldoc( self, docs=[], rev=None, hthdrs={} ) :
+        """Deletes one or more documents from the database, and all the
+        attachments contained within it. When deleting single document,
+        kqy-word argument `rev` (current revision of the document) should be
+        specified. When deleting multiple documents, `docs` must be a list of
+        tuples, (docid, document-revision)
+
+        Return,
+            None
+        Admin-Prev,
+            No
+        """
+        h = hthdrs
+        if isinstance(docs, (list, tuple)) :
+            [ LocalDocument.delete(self, doc, hthdrs=h, rev=rev) 
+              for doc, rev in docs]
+        else :
+            LocalDocument.delete( self, docs, hthdrs=h, rev=rev )
         return None
 
     @classmethod
