@@ -16,14 +16,24 @@ upload :
 sdist :
 	python ./setup.py sdist
 
-cleanall : clean
+sphinxdoc :
+	rm -rf docs/_build
+	bash -c "source couchpy-env/bin/activate; cd docs ; make html"
+
+upload-doc :
+	python setup.py upload_sphinx
+
+cleanall : clean cleandoc
 	rm -rf couchpy-env
+
+cleandoc : 
+	rm -rf docs/_build
+	rm -rf docs/_static
 
 clean :
 	rm -rf build;
 	rm -rf dist;
-	rm -rf CouchPy.egg-info;
-	rm -rf CouchPy.egg-info/;
+	rm -rf couchpy.egg-info;
 	rm -rf `find ./ -name "*.pyc"`;
 	rm -rf `find ./ -name "yacctab.py"`;
 	rm -rf `find ./ -name "lextab.py"`;

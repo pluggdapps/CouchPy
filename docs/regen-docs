@@ -1,0 +1,4 @@
+#!/bin/sh
+
+mkdir -p _static _build
+sphinx-build -E -b html ./ _build/ || exit 1

@@ -55,7 +55,7 @@ class ReSTful(object) :
 
     def _jsonloads( self, hdr, data ) :
         if 'application/json' in hdr.get( 'content-type', '' ) :
-            data = json.loads( data.read() )
+            data = json.loads( data.getvalue() )
         return data
 
     def head( self, paths, hdrs, body, _query=[] ) :
@@ -125,8 +125,7 @@ class ReSTful(object) :
         Returns,
             status, headers, data
         """
-        return self._request('DELETE', paths, hdrs, body, _query)
-        s, h, d = self.delete(paths, hdrs, body, _query)
+        s, h, d = self._request('DELETE', paths, hdrs, body, _query)
         d = self._jsonloads( h, d )
         return s, h, d
 
@@ -227,8 +226,8 @@ def _normalize( val ) :
     if val == True : return 'true'
     if val == False : return 'false'
 
-def data2json( data )
+def data2json( data ) :
     buf = StringIO()
     json.dump({}, buf) if data == None else json.dump(data, buf)
-    json = buf.getvalue()
-    return json
+    x = buf.getvalue()
+    return x

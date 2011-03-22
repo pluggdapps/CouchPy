@@ -1,12 +1,14 @@
 import sys, re
 from   copy         import deepcopy
 
-import rest
-from   httperror    import *
-from   httpc        import HttpSession, ResourceNotFound, OK, CREATED
-from   client       import Client
-from   doc          import Document
-
+import couchpy.rest
+from   couchpy.httperror  import *
+from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED
+from   couchpy.client     import Client
+from   couchpy.doc        import Document, LocalDocument
+from   couchpy.designdoc  import DesignDocument
+from   couchpy.attachment import Attachment
+from   couchpy.query      import Query
 
 # GOTCHA :
 #   1. The 'skip' option should only be used with small values, as skipping a
@@ -139,24 +141,26 @@ def _purge( conn, body, paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _all_docs( conn, keys=None, paths=[], hthdrs={}, **query ) :
+def _all_docs( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     """
     GET  /<db>/_all_docs,     if keys is None
     POST /<db>/_all_docs,    if keys is a list of document keys to select
-    query for GET,
+    query object `q` for GET
         descending=<bool>   endkey=<key>        endkey_docid=<id>
         group=<bool>        group_level=<num>   include_docs=<bool>
         key=<key>           limit=<num>         inclusive_end=<bool>
         reduce=<bool>       skip=<num>          stale='ok'
         startkey=<key>      startkey_docid=<id> update_seq=<bool>
+    Note that `q` object should provide .items() method with will return a
+    list of key,value query parameters.
     """
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     if keys == None :
-        s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
+        s, h, d = conn.get( paths, hthdrs, None, _query=q.items() )
     else :
         body = rest.data2json({ 'keys' : keys })
-        s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
+        s, h, d = conn.post( paths, hthdrs, body, _query=q.items() )
     if s == OK :
         return s, h, d
     else :
@@ -224,7 +228,7 @@ class Database( object ) :
         self.debug = kwargs.pop( 'debug', client.debug )
 
         self.conn = client.conn
-        self.paths = [ dbname ]
+        self.paths = client.paths + [ dbname ]
         self.info = {}
 
     def __call__( self ) :
@@ -356,7 +360,7 @@ class Database( object ) :
         s, h, d = _compact( conn, paths, hthdrs=hthdrs )
         return d
 
-    def viewcleanup( self, hthdrs-{} ) :
+    def viewcleanup( self, hthdrs={} ) :
         """Cleans up the cached view output on disk for a given view.
 
         Returns,
@@ -401,8 +405,8 @@ class Database( object ) :
         Admin-prev,
             No
         """
-        conn, paths = self.conn, (self.paths + ['_bulk_docs'])
-        s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths, hthdrs=hthdrs )
+        conn, paths, h = self.conn, (self.paths + ['_bulk_docs']), hthdrs
+        s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths=paths, hthdrs=h )
         return d
 
     def tempview( self, designdoc, hthdrs={}, **query ) :
@@ -451,7 +455,7 @@ class Database( object ) :
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
-    def docs( self, keys=None, hthdrs={}, **query ) :
+    def docs( self, keys=None, hthdrs={}, _q={}, **query ) :
         """Returns a JSON structure of all of the documents in a given
         database. The information is returned as a JSON structure containing
         meta information about the return structure, and the list documents
@@ -496,11 +500,16 @@ class Database( object ) :
         update_seq,
             Include the update sequence in the generated results,
 
+        Alternately, query parameters can be passes as a dictionary or Query
+        object to key-word argument `_q`.
+
         Admin-prev
             No
         """
-        conn, paths = self.conn, (self.paths + ['_all_docs'])
-        s, h, d = _all_docs( conn, keys=keys, paths, hthdrs=hthdrs, **query )
+        conn, paths, h = self.conn, (self.paths + ['_all_docs']), hthdrs
+        q = dict( _q.items() )
+        q.update( query )
+        s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=h, q=q )
         return d
 
     def missingrevs( self ) :
@@ -518,34 +527,57 @@ class Database( object ) :
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
 
-    def createdoc( self, docs=[], filepaths=[], hthdrs={}, **query ) :
-        """Create one or more document in this database. Optionally provide
-        a list of file-paths to be added as attachments to the document, HTTP
-        headers, and query parameters,
+    def createdoc( self, docs=None, localdocs=None, designdocs=None,
+                   filepaths=[], hthdrs={}, **query ) :
+        """Create one or more document in this database. Documents can be of
+            Normal documents
+            Local documents
+            Design document
+        Optionally provide a list of file-paths to be added as attachments to
+        the document, HTTP headers, and query parameters,
 
-        query parameters,
+        query parameters, for normal documents / local documents
         batch,
             if specified 'ok', allow document store request to be batched with
             other
 
         Return,
-            Document object
+            Document object (or) LocalDocument object (or)
+            DesignDocument object
         Admin-prev,
             No
         """
         h, q, f = hthdrs, query, filepaths
-        if isinstance(docs, (list, tuple)) :
-             r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
-        else :
-             r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
+        r = None
+        if docs != None and isinstance(docs, (list, tuple)) :
+            r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
+        elif docs != None :
+            r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
+        elif localdocs != None and isinstance(localdocs, (list, tuple)) :
+            r = [ LocalDocument.create(self, doc, hthdrs=h, **q) 
+                  for doc in localdocs ]
+        elif localdocs != None :
+            r = LocalDocument.create( self, localdocs, hthdrs=h, **q )
+        elif designdocs != None and isinstance(designdocs, (list,tuple)) :
+            r = [ DesignDocument.create(self, doc, hthdrs=h) 
+                  for doc in designdocs ]
+        elif designdocs != None :
+            r = DesignDocument.create(self, doc, hthdrs=h)
         return r
 
-    def deletedoc( self, docs=[], rev=None, hthdrs={} ) :
-        """Deletes one or more documents from the database, and all the
-        attachments contained within it. When deleting single document,
-        kqy-word argument `rev` (current revision of the document) should be
-        specified. When deleting multiple documents, `docs` must be a list of
-        tuples, (docid, document-revision)
+    def deletedoc( self, docs=None, localdocs=None, designdocs=None,
+                   rev=None, hthdrs={} ) :
+        """Deletes one or more documents from the database and all the
+        attachments contained in the document(s). Documents can be
+        of,
+            Normal documents
+            Local documents,
+            Design documents
+        and all the
+        When deleting single document, key-word argument `rev` (current revision
+        of the document) should be specified.
+        When deleting multiple documents, `docs` must be a list of tuples,
+        (docid, document-revision)
 
         Return,
             None
@@ -553,85 +585,69 @@ class Database( object ) :
             No
         """
         h = hthdrs
-        if isinstance(docs, (list, tuple)) :
+        if docs != None and isinstance(docs, (list, tuple)) :
             [Document.delete(self, doc, hthdrs=h, rev=rev) for doc,rev in docs]
-        else :
+        elif docs != None :
             Document.delete( self, docs, hthdrs=h, rev=rev )
+        elif localdocs != None and isinstance(docs, (list, tuple)) :
+            [ LocalDocument.delete(self, doc, hthdrs=h, rev=rev) 
+              for doc, rev in localdocs]
+        elif localdocs != None :
+            LocalDocument.delete( self, localdocs, hthdrs=h, rev=rev )
+        elif designdocs != None and isinstance(designdocs, (list,tuple)) :
+            [ DesignDocument.delete(self, doc, hthdrs=h, rev=rev) 
+              for doc, rev in designdocs ]
+        elif designdocs != None :
+            DesignDocument.delete(self, designdocs, hthdrs=h, rev=rev)
         return None
 
-    def createlocaldoc( self, docs=[], hthdrs={}, **query ) :
-        """Create one or more local document in this database. Optionally
-        provide HTTP headers, and query parameters,
+    def localdocs( self, keys=None, hthdrs={}, **query ) :
+        """Return a list of local documentation ids, internally, query
+        parameters,
+            startkey="_local/",
+            endkey="_local0"
+        will be used to fetch the local documents. Other query parameters can
+        be passed as key-word arguments.
+        """
+        q = Query( startkey="_local/", endkey="_local0" )
+        q.update( **query )
+        d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
+        return map( lambda x : x['id'], d['rows'] )
 
-        query parameters,
-        batch,
-            if specified 'ok', allow document store request to be batched with
-            other
+    def designdocs( self, keys=None, hthdrs={}, **query ) :
+        """Return a list of design documentation ids, internally, query
+        parameters,
+            startkey="_design/",
+            endkey="_design0"
+        will be used to fetch the design documents. Other query parameters can
+        be passed as key-word arguments.
+        """
+        q = Query( startkey="_design/", endkey="_design0" )
+        q.update( **query )
+        d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
+        return map( lambda x : x['id'], d['rows'] )
+
+    def copydoc( self, docid, rev, toid, asrev=None, hthdrs={} ) :
+        """Copy the specified document `docid` from `revision` to document
+        `toid` as revision `asrev`. `docid` should specify the source document
+        id, based on the id.
 
         Return,
-            Document object
+            On success, destination's document object, which can be of the
+            time Document or LocalDocument or DesignDocument, else None
         Admin-prev,
             No
         """
-        h, q = hthdrs, query
-        if isinstance(docs, (list, tuple)) :
-             r = [ LocalDocument.create(self, doc, hthdrs=h, **q) for doc in docs ]
-        else :
-             r = LocalDocument.create( self, docs, hthdrs=h, **q )
-        return r
-
-    def deletelocaldoc( self, docs=[], rev=None, hthdrs={} ) :
-        """Deletes one or more documents from the database, and all the
-        attachments contained within it. When deleting single document,
-        kqy-word argument `rev` (current revision of the document) should be
-        specified. When deleting multiple documents, `docs` must be a list of
-        tuples, (docid, document-revision)
-
-        Return,
-            None
-        Admin-Prev,
-            No
-        """
         h = hthdrs
-        if isinstance(docs, (list, tuple)) :
-            [ LocalDocument.delete(self, doc, hthdrs=h, rev=rev) 
-              for doc, rev in docs]
+        if docid.startswith( '_local' ) :
+            d = LocalDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
+                                    rev=rev )
+        elif docid.startswith( '_design' ) :
+            d = DesignDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
+                                     rev=rev )
         else :
-            LocalDocument.delete( self, docs, hthdrs=h, rev=rev )
-        return None
-
-    @classmethod
-    def create( client, dbname, hthdrs={} ) :
-        """
-        Creates a new database. The database name must be composed of one or
-        more of the following characters.
-        * Lowercase characters (a-z)
-        * Name must begin with a lowercase letter
-        * Digits (0-9)
-        * Any of the characters _, $, (, ), +, -, and /
-
-        Return,
-            Database object
-        Admin-prev
-            No
-        """
-        s, h, d = _createdb( client.conn, self.paths, hthdrs=hthdrs )
-        if s == OK and d["ok"] == True :
-            return Database( client, dbname, hthdrs=hthdrs )
-        else :
-            return None
-
-    @classmethod
-    def delete( client, dbname, hthdrs={} ) :
-        """Deletes the specified database, and all the documents and
-        attachments contained within it.
-
-        Return,
-            JSON converted object as returned by couchDB.
-        Admin-prev
-            No
-        """
-        s, h, d = _deletedb( client.conn, self.paths, hthdrs=hthdrs )
+            d = Document.copy( self, docid, toid, asrev=asrev, hthdrs=h,
+                               rev=rev )
         return d
 
     _committed_update_seq = lambda self : self()['committed_update_seq']
@@ -653,6 +669,42 @@ class Database( object ) :
     instance_start_time  = property( _instance_start_time )
     purge_seq            = property( _purge_seq )
     update_seq           = property( _update_seq )
+
+    @classmethod
+    def create( cls, client, dbname, hthdrs={} ) :
+        """
+        Creates a new database. The database name must be composed of one or
+        more of the following characters.
+        * Lowercase characters (a-z)
+        * Name must begin with a lowercase letter
+        * Digits (0-9)
+        * Any of the characters _, $, (, ), +, -, and /
+
+        Return,
+            Database object
+        Admin-prev
+            No
+        """
+        conn, paths = client.conn, (client.paths + [ dbname ])
+        s, h, d = _createdb( conn, paths, hthdrs=hthdrs )
+        if s == OK and d["ok"] == True :
+            return Database( client, dbname, hthdrs=hthdrs )
+        else :
+            return None
+
+    @classmethod
+    def delete( cls, client, dbname, hthdrs={} ) :
+        """Deletes the specified database, and all the documents and
+        attachments contained within it.
+
+        Return,
+            JSON converted object as returned by couchDB.
+        Admin-prev
+            No
+        """
+        conn, paths = client.conn, (client.paths + [dbname])
+        s, h, d = _deletedb( conn, paths, hthdrs=hthdrs )
+        return d
 
     # TODO : Collect all special db names ...
     SPECIAL_DB_NAMES = set([ '_users', ])

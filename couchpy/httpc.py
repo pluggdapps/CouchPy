@@ -1,5 +1,4 @@
-"""
-Simple HTTP client implementation based on the ``httplib`` module in the
+"""Simple HTTP client implementation based on the ``httplib`` module in the
 standard library.
 """
 
@@ -83,6 +82,7 @@ class HttpSession( object ) :
                   retry_delays=[0], retryable_errors=RETRYABLE_ERRORS,
                   user_agent='couchpy' ) :
         """Initialize an HTTP client session.
+
         cache
             an instance with a dict-like interface or None to allow
             HttpSession to create a dict for caching.

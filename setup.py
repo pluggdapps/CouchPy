@@ -2,8 +2,8 @@
 # file 'LICENSE', which is part of this source code package.
 #       Copyright (c) 2010 SKR Farms (P) LTD.
 
-from   setuptools import setup, find_packages
-from   os.path    import abspath, dirname, join
+from   setuptools    import setup, find_packages
+from   os.path       import abspath, dirname, join
 import os
 import re
 
@@ -14,7 +14,7 @@ v = open(join(dirname(__file__), 'couchpy', '__init__.py'))
 version = re.compile(r".*__version__[ ]*=[ ]*'(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
-description='An extensible wiki processor, using parser grammer'
+description="Client library in Python interfacing with CouchDB's ReSTful API"
 
 classifiers=[
 'Development Status :: 4 - Beta',
@@ -60,11 +60,8 @@ setup(
     entry_points={                          # setuptools
     },
     install_requires=[                      # setuptools
-        'ply==3.4',
-        'lxml==2.3',
-        'pygments==1.4',
-        'paste==1.7.5.1',
-        'nose==1.0.0',
+        'pygments',
+        'sphinx',
     ],
     extras_require={},                      # setuptools
     setup_requires={},                      # setuptools

@@ -6,6 +6,7 @@ syntax: glob
 pluggd-env
 .vim_maindev
 .vim_templates
+.vim_doc
 yacctab.py
 lextab.py
 bootstrap.egg-info/

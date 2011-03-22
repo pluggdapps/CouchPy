@@ -1,3 +1,6 @@
+"""Module provides provides a convinient class :class:`Attachment` to access (Create,
+Read, Delete) document attachments."""
+
 from   copy             import deepcopy
 from   mimetypes        import guess_type
 import base64
@@ -5,6 +8,9 @@ import base64
 from   httperror        import *
 from   httpc            import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy          import CouchPyError
+
+# TODO :
+#   1. URL-encoding for attachment file-names
 
 def _readattach( conn, paths=[], hthdrs={} ) :
     """
@@ -17,7 +23,7 @@ def _readattach( conn, paths=[], hthdrs={} ) :
     else :
         return (None, None, None)
 
-def _writeattach( conn, paths=[], body, hthdrs={}, **query ) :
+def _writeattach( conn, paths=[], body='', hthdrs={}, **query ) :
     """
     PUT /<db>/<doc>/<attachment>
     PUT /<db>/_design/<design-doc>/<attachment>
@@ -48,10 +54,10 @@ def _deleteattach( conn, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 class Attachment( object ) :
-
     def __init__( self, doc, filename ) :
-        """Instance object representing a single attachment in a document, use
-        the Document object and attachment `filename` to create the instance.
+        """Class instance object represents a single attachment in a document,
+        use the :class:`Document` object and attachment `filename` to create
+        the instance.
         """
         self.doc = doc
         self.filename = filename
@@ -77,12 +83,11 @@ class Attachment( object ) :
     length = property( lambda self : self.attachinfo('length') )
     revpos = property( lambda self : self.attachinfo('revpos') )
     stub = property( lambda self : self.attachinfo('stub') )
-    content = property(data)
+    content = property( lambda self : self.data() )
         
     @classmethod
-    def getattachment( db, doc, filename, hthdrs={} ) :
-        """Returns a tuple of,
-            ( <filedata>, <content_type> )
+    def getattachment( cls, db, doc, filename, hthdrs={} ) :
+        """Returns a tuple of, ( <filedata>, <content_type> )
         for attachment `filename` in `doc` stored in database `db`
         """
         id_ = doc if isinstance(doc, basestring) else doc._id
@@ -92,8 +97,8 @@ class Attachment( object ) :
         return (d, content_type)
 
     @classmethod
-    def putattachment( db, doc, filename, data, content_type=None, hthdrs={},
-                       **query ) :
+    def putattachment( cls, db, doc, filename, data, content_type=None,
+                       hthdrs={}, **query ) :
         """Upload the supplied content (data) as attachment to the specified
         document (doc). `filename` provided must be a URL encoded string.
         If `doc` is document-id, then `rev` keyword parameter should be
@@ -112,7 +117,7 @@ class Attachment( object ) :
         return d
 
     @classmethod
-    def delattachment( db, doc, filename, hthdrs={}, **query ) :
+    def delattachment( cls, db, doc, filename, hthdrs={}, **query ) :
         """Deletes the attachment form the specified doc. You must
         supply the rev argument with the current revision to delete the
         attachment."""
@@ -125,7 +130,7 @@ class Attachment( object ) :
         return d
 
     @classmethod
-    def files2attach( fnames=[] ) :
+    def files2attach( cls, fnames=[] ) :
         """Helper method that will convert specified files `fnames` into
         attachment structures in document format (key, value) pairs that is
         suitable for writing into CouchDB.

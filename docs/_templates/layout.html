@@ -1,0 +1,16 @@
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<link rel="stylesheet" type="text/css"
+ href="{{ pathto('_static/paste.css') }}">
+{% endblock %}
+
+{% block sidebartoc %}
+<h3><a href="http://couchpy.pluggdapps.com/" class="invisible-link">CouchPy</a></h3>
+
+<ul>
+</ul>
+
+{{ super() }}
+{% endblock %}

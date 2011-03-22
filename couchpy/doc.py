@@ -7,14 +7,12 @@ import base64
 
 from   httperror          import *
 from   httpc              import HttpSession, ResourceNotFound, OK, CREATED
-from   database           import Database
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
 
 # TODO :
 #   1. Batch mode POST / PUT should have a verification system built into it.
 #   2. Attachments allowed in local documents ???
-#   3. URL-encoding for attachment file-names
 
 log = configlog( __name__ )
 
@@ -23,11 +21,11 @@ log = configlog( __name__ )
     '_id' : <unique id>
     '_rev' : <current-revno>
     '_attachments' : {
-        <filename> : {
+        <filename> : {      // For updating attachments
             'content_type' : '<content-type>'
             'data' : '<base64-encoded data>'
         },
-        <filename> : {
+        <filename> : {      // Attachment stubs in DB
             'content_type' : '<content-type>'
             'length' : '<len>'
             'revpos' : '<doc-revision>'
@@ -56,7 +54,9 @@ def _createdoc( conn, doc, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 def _readdoc( conn, paths=[], hthdrs={}, **query ) :
-    """GET /<db>/<doc>
+    """
+    GET /<db>/<doc>
+    GET /<db>/_local/<doc>
     query,
         rev=<_rev>, revs=<'true'>, revs_info=<'true'>
     """
@@ -69,7 +69,9 @@ def _readdoc( conn, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 def _headdoc( conn, paths=[], hthdrs={}, **query ) :
-    """HEAD /<db>/<doc>
+    """
+    HEAD /<db>/<doc>
+    HEAD /<db>/_local/<doc>
     query,
         rev=<_rev>, revs=<'true'>, revs_info=<'true'>
     """
@@ -80,13 +82,15 @@ def _headdoc( conn, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
-    """PUT /<db>/<doc>
+    """
+    PUT /<db>/<doc>
+    PUT /<db>/_local/<doc>
     query,
         batch='ok'
     """
     if '_id' not in doc :
         raise CouchPyError( '`_id` to be supplied while updating the doc' )
-    if '_rev' not in doc :
+    if '_local' not in paths and '_rev' not in doc :
         raise CouchPyError( '`_rev` to be supplied while updating the doc' )
     body = rest.data2json( doc )
     hthdrs = deepcopy( hthdrs )
@@ -98,7 +102,9 @@ def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 def _deletedoc( conn, doc, paths=[], hthdrs={}, **query ) :
-    """DELETE /<db>/<doc>
+    """
+    DELETE /<db>/<doc>
+    DELETE /<db>/_local/<doc>
     query,
         rev=<_rev>
     """
@@ -113,7 +119,9 @@ def _deletedoc( conn, doc, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 def _copydoc( conn, paths=[], hthdrs={}, **query ) :
-    """COPY /<db>/<doc>
+    """
+    COPY /<db>/<doc>
+    COPY /<db>/_local/<doc>
     query,
         rev=<_srcrev>
     """
@@ -137,6 +145,7 @@ class Document( object ) :
         HTTP headers `hthdrs`. 
 
         query parameters,
+
         rev,
             Specify the revision to return
         revs,
@@ -184,7 +193,7 @@ class Document( object ) :
         """
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
-        self.doc.update({ key, value })
+        self.doc.update({ key : value })
         s, h, d = _updatedoc( self.conn, self.doc, self.paths )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         self.revs = None            # Enforce a fetch
@@ -192,6 +201,14 @@ class Document( object ) :
         return None
 
     def __delitem__( self, key ) :
+        """Python way of deleting the item, you can also use, delitem()
+        method
+        """
+        return self.delitem( key )
+
+    def __iter__(self):
+        """Yield a key,value pair for every iteration"""
+        return iter( self.doc.items() )
 
     def __call__( self, hthdrs={}, **query ) :
         """
@@ -237,7 +254,7 @@ class Document( object ) :
             return self.revs
         elif revs_info == True :
             q = { 'revs_info' : 'true' }
-            if self.revs_info
+            if self.revs_info :
                 s, h, d = _headdoc( conn, paths, hthdrs=hthdrs, **q )
                 if s == OK and h['Etag'] == self.doc['_rev'] :
                     return self.revs_info
@@ -253,9 +270,9 @@ class Document( object ) :
             self.doc = d
             return self
 
-    def __iter__(self):
-        """Yield a key,value pair for every iteration"""
-        return iter( self.doc.items() )
+    def items( self ) :
+        """Dictionary method to provide a list of (key,value) tuple"""
+        return self.doc.items()
 
     def all( self ) :
         """Shortcut for,
@@ -293,10 +310,6 @@ class Document( object ) :
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         return None
 
-    def items( self ) :
-        """Dictionary method to provide a list of (key,value) tuple"""
-        return self.doc.items()
-
     def delitem( self, key ) :
         """Remove the specified key from document. However, the following keys
         cannot be removed,
@@ -310,17 +323,13 @@ class Document( object ) :
             No
         """
         reserved = [ '_id', '_rev' ]
-        if key in reserved return None
+        if key in reserved : return None
         val, _ = ( self.doc.pop(key, None), self.update() )
-        return val
-
-        s, h, d = _updatedoc( self.conn, self.doc, self.paths )
-        self.doc.update({ '_rev' : d['rev'] }) if d else None
         self.revs = None            # Enforce a fetch
         self.revs_info = None       # Enforce a fetch
-        return None
+        return val
 
-    def copy( self, toid, asrev=None ) :
+    def copyto( self, toid, asrev=None ) :
         """Copy this revision of document to a destination specified by
         `toid` and optional revision `asrev`. The source document revision
         will be same as this Document object.
@@ -385,14 +394,14 @@ class Document( object ) :
     _conflict = property( lambda self : self.doc.get('_conflict', {}) )
 
     @classmethod
-    def head( db, doc, hthdrs={}, **query ) :
+    def head( cls, db, doc, hthdrs={}, **query ) :
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
         s, h, d = _headdoc( db.conn, paths, hthdrs=hthdrs, **query )
         return s, h, d
 
     @classmethod
-    def create( db, doc, attachfiles=[], hthdrs={}, **query ) :
+    def create( cls, db, doc, attachfiles=[], hthdrs={}, **query ) :
         """Create a new document in the specified database, using the supplied
         JSON document structure. If the JSON structure includes the _id
         field, then the document will be created with the specified document
@@ -421,7 +430,7 @@ class Document( object ) :
         return Document( db, doc, fetch=False )
 
     @classmethod
-    def delete( db, doc, hthdrs={}, **query ) :
+    def delete( cls, db, doc, hthdrs={}, **query ) :
         """Delete a document in the specified database. `doc` can be
         document-id or it can be Document object, in which case the object is
         not valid after deletion.
@@ -441,7 +450,7 @@ class Document( object ) :
         return d
 
     @classmethod
-    def copy( db, doc, toid, asrev=None, hthdrs={}, **query ) :
+    def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
         """Copy a source document to a destination, specified by
         `toid` and optional revision `asrev`. If the source document's
         revision `rev` is not provided as key-word argument, then the latest
@@ -472,7 +481,6 @@ class Document( object ) :
         '_security',
         '_local',
     ])
-
     def validate_docid( self, docid ) :
         return not (docid in SPECIAL_DOC_NAMES)
 
@@ -488,6 +496,7 @@ class LocalDocument( Document ) :
         database `db`. Optionally accepts HTTP headers `hthdrs`.
 
         query parameters,
+
         rev,
             Specify the revision to return
         revs,
@@ -502,10 +511,11 @@ class LocalDocument( Document ) :
         """
         Document.__init__( self, db, doc, hthdrs={}, **query )
         id_ = doc if isinstance(doc, basestring) else doc['_id']
+        id_ = self.id2name( id_ )
         self.paths = db.paths + [ '_local',  id_ ]
 
     @classmethod
-    def create( db, doc, hthdrs={}, **query ) :
+    def create( cls, db, doc, hthdrs={}, **query ) :
         """Create a new local document in the specified database, using the
         supplied JSON document structure. Unlike for Document objects, the
         JSON structure must include _id field.
@@ -524,13 +534,13 @@ class LocalDocument( Document ) :
         if not self.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_local', id_ ]
-        s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
+        s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         doc.update({ '_rev' : d['rev'] })
         return LocalDocument( db, doc, fetch=False )
 
     @classmethod
-    def delete( db, doc, hthdrs={}, **query ) :
+    def delete( cls, db, doc, hthdrs={}, **query ) :
         """Delete a document in the specified database. `doc` can be
         document-id or it can be Document object, in which case the object is
         not valid after deletion.
@@ -550,7 +560,7 @@ class LocalDocument( Document ) :
         return d
 
     @classmethod
-    def copy( db, doc, toid, asrev=None, hthdrs={}, **query ) :
+    def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
         """Copy a source document to a destination, specified by
         `toid` and optional revision `asrev`. If the source document's
         revision `rev` is not provided as key-word argument, then the latest
@@ -571,4 +581,5 @@ class LocalDocument( Document ) :
         else :
             return None
 
-
+    def id2name( self, id_ ) :
+        return id_[6:] if id_.startswith( '_local' ) else id_
