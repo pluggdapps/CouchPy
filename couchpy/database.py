@@ -1,3 +1,13 @@
+"""Database definition for accessing CouchDB database. An instance of
+:class:`Database` class corresponds to a single database in CouchDB server,
+the object can be used to interface with it. Aside from that,
+:class:`Database` objects provide pythonified way of accessing it.
+
+Create a client object,
+
+>>> c = Client()
+>>> db = c.create('dbname_first') # Create
+"""
 import sys, re
 from   copy         import deepcopy
 
@@ -222,7 +232,14 @@ def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
 class Database( object ) :
 
     def __init__( self, client, dbname, **kwargs ) :
-        """Interface with database `dbname`"""
+        """Instantiate the database object corresponding to ``dbname`` in
+        CouchdDB server provided by ``client``.
+
+        Optional arguments,
+
+        ``debug``, 
+            for enhanced logging
+        """
         self.client = client
         self.dbname = Database.validate_dbname( dbname )
         self.debug = kwargs.pop( 'debug', client.debug )
@@ -232,39 +249,45 @@ class Database( object ) :
         self.info = {}
 
     def __call__( self ) :
-        """Gets information about the specified database
+        """Returns information about this database, refer to ``GET /db`` API
+        from CouchDB to know the structure of information. 
 
-        Return,
-            Returns the information dictionary.
-        Admin-Prev,
-            No
+        Admin-Prev, No
         """
         s, h, d = _db( self.conn, self.paths )
         self.info = d
         return d
 
     def __iter__( self ) :
-        """Return the IDs of all documents in the database."""
+        """Iterate over all document IDs in this database. For every
+        iteration, `_id` value will be yielded"""
         d = self.docs()
         return iter( map( lambda x : x['id'], d['rows'] ))
 
     def __getitem__( self, key ) :
-        """Fetch the latest revision of the document specified by `key` and
-        return a corresponding Document object
+        """Fetch the latest revision of the document specified by ``key`` and
+        return a corresponding :class:`couchpy.doc.Document` object. To avoid
+        fetching document from the database, directly instantiate the Document
+        object as below,
+        
+        >>> Document( db, _id, fetch=False )
+
+        Where `db` is :class:`Database` object and _id is document-id
         """
         return Document( self, key )
 
-    def __len__(self) :
-        """Return the number of documents in the database."""
+    def __len__(self ) :
+        """Return number of documents in the database."""
         d = self.docs()
         return d['total_rows']
 
     def __nonzero__(self):
-        """Return whether the database is available."""
+        """Return a boolean, on database availability in the server. Python
+        way of bool-check for :func:`Database.ispresent`"""
         return self.ispresent()
 
-    def __delitem__(self, docid):
-        """Remove the document with the specified ID from the database"""
+    def __delitem__(self, docid) :
+        """Remove the document specified by ``docid`` from database"""
         s, h, d = Document.head( self, docid )
         self.deletedoc( docid, rev=h['Etag'] )
 
@@ -277,11 +300,8 @@ class Database( object ) :
         return '<%s %r>' % (type(self).__name__, self.name)
 
     def __contains__( self, docid ) :
-        """Return whether the database contains a document with the specified
-        docid.
-
-        Return,
-            `True` if a document with the id exists, `False` otherwise.
+        """Return whether the document identified by ``docid`` is present in
+        the database.
         """
         try :
             Document.head( self, docid )
@@ -290,6 +310,7 @@ class Database( object ) :
             return False
 
     def ispresent( self ) :
+        """Return a boolean, on database availability in the server."""
         try :
             self()
             return True
@@ -297,31 +318,31 @@ class Database( object ) :
             return False
 
     def changes( self, hthdrs={}, **query ) :
-        """Obtains a list of the changes made to the database. This can be
+        """Obtains a list of changes done to the database. This can be
         used to monitor for update and modifications to the database for post
-        processing or synchronization.
+        processing or synchronization. Returns JSON converted changes objects,
+        and the last update sequence number, as returned by CouchDB. Refer to
+        ``GET /<db>/_changes`` API for more information.
 
         query parameters,
-        feed,
+
+        ``feed``,
             Type of feed, longpoll | continous | normal
-        filter,
+        ``filter``,
             Filter function from a design document to get updates.
-        heartbeat,
+        ``heartbeat``,
             Period after which an empty line is sent during longpoll or
             continuous.
-        include_docs,
+        ``include_docs``,
             Include the document with the result.
-        limit,
+        ``limit``,
             Maximum number of rows to return.
-        since,
+        ``since``,
             Start the results from the specified sequence number.
-        timeout,
+        ``timeout``,
             Maximum period to wait before the response is sent, in
             milliseconds.
 
-        Return,
-            JSON converted changes objects, and the last update sequence
-            number, as returned by CouchDB
         Admin-prev
             No
         """
@@ -330,9 +351,9 @@ class Database( object ) :
         return d
 
     def compact( self, designdoc=None, hthdrs={} ) :
-        """Request compaction of the specified database. Compaction
-        compresses the disk database file by performing the following
-        operations.
+        """Request compaction for this database. Compaction compresses the
+        disk database file by performing the following operations.
+
         * Writes a new version of the database file, removing any unused
         sections from the new version during write. Because a new file is
         temporary created for this purpose, you will need twice the current
@@ -342,16 +363,17 @@ class Database( object ) :
         per-database limit specified by the _revs_limit database
         parameter.
 
-        Alternatively, you can specify the `designdoc` key-word argument to
-        compacts the view indexes associated with the specified design
+        Alternatively, you can specify the ``designdoc`` key-word argument to
+        compact the view indexes associated with the specified design
         document. You can use this in place of the full database compaction if
         you know a specific set of view indexes have been affected by a recent
         database change.
 
-        Return,
-            JSON converted object as returned by CouchDB
-        Admin-prev
-            No
+        Return JSON converted object as returned by CouchDB, refer to 
+        ``POST /<db>/_compact`` and ``POST /<db>/_compact>/<designdoc>`` for
+        more information.
+
+        Admin-prev, No
         """
         conn, paths = ( self.conn, (self.paths + ['_compact']) 
                       ) if designdoc == None else ( 
@@ -361,12 +383,9 @@ class Database( object ) :
         return d
 
     def viewcleanup( self, hthdrs={} ) :
-        """Cleans up the cached view output on disk for a given view.
+        """Clean-up the cached view output on the disk.
 
-        Returns,
-            None,
-        Admin-prev,
-            Yes
+        Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_view_cleanup'])
         s, h, d = _view_cleanup( conn, paths, hthdrs=hthdrs )
