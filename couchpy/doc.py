@@ -1,3 +1,9 @@
+"""CouchDB is a document database and every document is stored in JSON format.
+Fortunately, JSON formated objects can easily be converted to native python
+objects. Document class defines a collection of attributes and methods to
+access CouchDB documents.
+"""
+
 import sys, re, json, time
 from   os.path            import basename
 from   copy               import deepcopy
@@ -137,26 +143,23 @@ def _copydoc( conn, paths=[], hthdrs={}, **query ) :
 class Document( object ) :
 
     def __init__( self, db, doc, fetch=True, hthdrs={}, **query ) :
-        """
-        Read the document specified by doc, which can be either a dictionary
-        containing `_id` key or a string to be interpreted as `_id` from
-        database `db`.  If key-word argument `fetch` is passed as False, then
-        the document will not be fetched from the database. Optionally accepts
-        HTTP headers `hthdrs`. 
+        """Instantiate python representation of a CouchDB document, specified
+        by ``doc`` for database ``db``. ``db`` should be a
+        :class:`couchpy.database.Database` object, while ``doc``
+        can either be a dictionary of key, value pairs (where one of the key
+        should be ``_id``) convertible to JSON or a string to be interpreted
+        as document ``_id``. By default, the document identified by ``_id``
+        will be fetched from the database, converted and encapsulated into
+        this object. To avoid database access, pass key-word argument
+        ``fetch`` as False. Optionally accepts HTTP headers ``hthdrs``, which
+        will be remembered for all database access initiated via this object.
 
-        query parameters,
+        Optional arguments:
 
-        rev,
-            Specify the revision to return
-        revs,
-            Return a list of the revisions for the document
-        revs_info,
-            Return a list of detailed revision information for the document
+        ``rev``,
+            Specify document's revision to fetch.
 
-        Return,
-            Document object
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         # TODO : url-encode _id ???
         self.db = db
@@ -172,155 +175,146 @@ class Document( object ) :
         self.revs_info = None   # Cached object
         self.client = db.client
         self.debug = db.debug
+        self.hthdrs = hthdrs
 
     def __getitem__(self, key) :
-        """Read JSON converted document object like a dictionary"""
+        """Fetch a value corresponding to the ``key`` stored in this document.
+        This method does not trigger a database access, instead it uses the
+        cached representation of the document. To refresh the document from
+        database, do, `doc()`
+        """
         return self.doc.get( key, None )
 
     def __setitem__(self, key, value) :
-        """Update JSON converted document object like a dictionary. Updating
-        the document object using this interface will automatically PUT the
-        document into the database. However, the following keys cannot be
-        updated,
-            `_id`, `_rev`
-        To refresh the Document object, so that it reflects the
-        database document, call the Document object, `doc()`
+        """Update the ``key`` value with ``value``. Updating the document
+        object using this interface will automatically PUT the document into
+        the database. However, the following keys cannot be updated, ``_id``,
+        ``_rev``. To refresh the document from database, do, `doc()`
         
-        Return,
-            None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
         self.doc.update({ key : value })
-        s, h, d = _updatedoc( self.conn, self.doc, self.paths )
+        h = deepcopy( self.hthdrs )
+        s, h, d = _updatedoc( self.conn, self.doc, self.paths, hthdrs=h )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         self.revs = None            # Enforce a fetch
         self.revs_info = None       # Enforce a fetch
         return None
 
     def __delitem__( self, key ) :
-        """Python way of deleting the item, you can also use, delitem()
-        method
-        """
+        """Delete key, value pair identified by ``key``. Python shortcut for
+        :func:`Document.delitem`"""
         return self.delitem( key )
 
     def __iter__(self):
-        """Yield a key,value pair for every iteration"""
+        """Yield document's key,value pair for every iteration"""
         return iter( self.doc.items() )
 
     def __call__( self, hthdrs={}, **query ) :
-        """
-        If no argument is speficied refresh the document from database.
+        """If no argument is speficied, refresh the document from database.
         Optionally accepts HTTP headers `hthdrs`.
 
-        query parameters,
-        rev,
-            If specified, and not the same as this Document
-            object's revision, create a fresh Document object with the
-            document of specified revision read from database.
-        revs,
+        Optional arguments:
+
+        ``rev``,
+            If specified, and not the same as this Document object's
+            revision, create a fresh :class:`Document` object corresponding to
+            the specified revision. Fetch the same from database.
+        ``revs``,
             If True, return JSON converted object containing a list of
-            revisions for the document. Structure of the returned object is
-            defined by CouchDB
-        revs_info,
+            revisions for this document. Structure of the returned object is
+            defined by CouchDB. Refer to ``GET /<db>/<doc>`` in CouchDB API
+            manual
+        ``revs_info``,
             If True, return JSON converted object containing extended
             information about all revisions of the document. Structure of the
             returned object is defined by CouchDB.
-        Note that, `revs` and `revs_info` object are cached using Etag header
+
+        Note that, ``revs`` and ``revs_info`` object are cached using Etag header
         value.
 
-        Return,
-            Based on query parameters
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         rev = query.get( 'rev', None )
         revs = query.get( 'revs', None )
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
+        h = deepcopy( self.hthdrs )
+        h.update( hthdrs )
 
         if rev != None and rev != self.doc['_rev'] :
-            return self.__class__( self.db, self.doc, hthdrs=hthdrs, rev=rev )
+            return self.__class__( self.db, self.doc, hthdrs=h, rev=rev )
         elif revs == True :
             q = { 'revs' : 'true' }
             if self.revs :
-                s, h, d = _headdoc( conn, paths, hthdrs=hthdrs, **q )
+                s, h, d = _headdoc( conn, paths, hthdrs=h, **q )
                 if s == OK and h['Etag'] == self.doc['_rev'] :
                     return self.revs
-            s, h, d = _readdoc( conn, paths, hthdrs=hthdrs, **q )
+            s, h, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs = d
             return self.revs
         elif revs_info == True :
             q = { 'revs_info' : 'true' }
             if self.revs_info :
-                s, h, d = _headdoc( conn, paths, hthdrs=hthdrs, **q )
+                s, h, d = _headdoc( conn, paths, hthdrs=h, **q )
                 if s == OK and h['Etag'] == self.doc['_rev'] :
                     return self.revs_info
-            s, h, d = _readdoc( conn, paths, hthdrs=hthdrs, **q )
+            s, h, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs_info = d
             return self.revs_info
         else :
             if self.doc :
-                s, h, d = _headdoc( conn, paths, hthdrs=hthdrs )
+                s, h, d = _headdoc( conn, paths, hthdrs=h )
                 if s == OK and h['Etag'] == self.doc['_rev'] :
                     return self
-            s, h, d = _readdoc( conn, paths, hthdrs=hthdrs )
+            s, h, d = _readdoc( conn, paths, hthdrs=h )
             self.doc = d
             return self
 
     def items( self ) :
-        """Dictionary method to provide a list of (key,value) tuple"""
+        """Return a list of (key,value) pairs in this document"""
         return self.doc.items()
 
     def all( self ) :
         """Shortcut for,
-            doc( revs=True )
 
-        Returns,
-            JSON converted object containing a list of revisions for the
-            document.
-        Admin-prev,
-            No
+        >>> doc( revs=True )
+
+        Returns JSON converted object containing a list of revisions for the
+        document. Refer to ``GET /<db>/<doc>`` in CouchDB API manual.
+
+        Admin-prev, No
         """
         return self( revs=True )
 
     def update( self, using={}, hthdrs={} ) :
-        """Update JSON converted document object with a dictionary.
+        """Update document ``using`` a dictionary.
         Updating the document using this interface will automatically PUT the
         document into the database. However, the following keys cannot be
-        updated,
-            `_id`, `_rev`
-        Optionally accepts HTTP headers `hthdrs`. Calling it with empty
-        argument will simply put the existing document content into the
-        database.
-        To refresh the Document object, so that it reflects the database
-        document, call the Document object, `doc()`
+        updated, ``_id``, ``_rev``. Optionally accepts HTTP headers `hthdrs`.
+        Calling it with empty argument will simply put the existing document
+        content into the database. To refresh the document object, do,
+        `doc()`.
 
-        Return,
-            None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
         self.doc.update( using )
         conn, paths = self.conn, self.paths
-        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
+        h = deepcopy( self.hthdrs )
+        h.update( hthdrs )
+        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=h, **query )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         return None
 
     def delitem( self, key ) :
         """Remove the specified key from document. However, the following keys
-        cannot be removed,
-            `_id`, `_rev`
-        To refresh the Document object, so that it reflects the database
-        document, call the Document object, `doc()`
-        
-        Return,
-            Value of the deleted key
-        Admin-prev,
-            No
+        cannot be removed, ``_id``, ``_rev``. To refresh the document object,
+        do, `doc()`. Return the value of deleted key.
+
+        Admin-prev, No
         """
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
@@ -331,58 +325,62 @@ class Document( object ) :
 
     def copyto( self, toid, asrev=None ) :
         """Copy this revision of document to a destination specified by
-        `toid` and optional revision `asrev`. The source document revision
-        will be same as this Document object.
+        ``toid`` and optional revision ``asrev``. The source document revision
+        will be same as this ``Document`` object. On success, return copied
+        document object, else None.
 
-        Return,
-            On success, copied document object, else None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         return self.__class__.copy( self.db, self, toid, asrev=asrev,
                                     rev=self._rev )
 
     def addattach( self, filepath, content_type=None, hthdrs={}, **query ) :
-        """Add file `filepath` as attachment to this document. HTTP headers
-        'Content-Type' and 'Content-Length' will also be remembered in the
-        database. Optinally, content_type can be provided as key-word
+        """Add file specified by ``filepath`` as attachment to this document.
+        HTTP headers 'Content-Type' and 'Content-Length' will also be remembered
+        in the database. Optionally, ``content_type`` can be provided as key-word
         argument.
         
-        Return,
-            Attachment object
-        Admin-prev,
-            No
+        Return :class:`couchpy.attachment.Attachment` object.
+
+        Admin-prev, No
         """
         data = open( filepath ).read()
         filename = basename( filepath )
+        h = deepcopy( self.hthdrs )
+        h.update( hthdrs )
         d = Attachment.putattachment(
                 self.db, self, filename, data, content_type=content_type,
-                hthdrs=hthdrs, **query
+                hthdrs=h, **query
             )
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None
         return Attachment( self, filename )
 
     def delattach( self, attach, hthdrs={}, **query ) :
-        """Delete the attachment either specified as filename or Attachment
-        object from this document
+        """Delete the attachment specified either as filename or Attachment
+        object, from this document.
+
+        >>> doc.delattach( 'default.css' )
+        >>> attach = doc.attach( 'default.css' )
+        >>> doc.delattach( attach )
         """
         filename = attach.filename \
                    if isinstance(attach, Attachment) else attach
-        d = Attachment.delattachment(
-                self.db, self, filename, hthdrs=hthdrs, **query
-            )
+        h = deepcopy( self.hthdrs )
+        h.update( self.hthdrs )
+        d = Attachment.delattachment(self.db, self, filename, hthdrs=h, **query)
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None
         return None
 
     def attach( self, filename ) :
-        """Return Attachment object for filename in this document"""
+        """Return :class:`couchpy.attachment.Attachment` object for
+        ``filename`` attachment stored under this document."""
         a_ = self.doc.get( '_attachment', {} ).get( filename, None )
         a = Attachment( self, filename ) if a_ else None
         return a
 
     def attachs( self ) :
-        """Return a list of all Attachment object for attachment in this
-        document
+        """Return a list of all attachments in this document as 
+        :class:`couchpy.attachment.Attachment` objects.
         """
         a = [ Attachment(self, f) for f in self.doc.get('_attachments', {}) ]
         return a
@@ -395,6 +393,7 @@ class Document( object ) :
 
     @classmethod
     def head( cls, db, doc, hthdrs={}, **query ) :
+        """Probe whether the document is available"""
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
         s, h, d = _headdoc( db.conn, paths, hthdrs=hthdrs, **query )
@@ -402,21 +401,21 @@ class Document( object ) :
 
     @classmethod
     def create( cls, db, doc, attachfiles=[], hthdrs={}, **query ) :
-        """Create a new document in the specified database, using the supplied
-        JSON document structure. If the JSON structure includes the _id
-        field, then the document will be created with the specified document
-        ID. If the _id field is not specified, a new unique ID will be
-        generated.
+        """Create a new document ``doc`` in the specified database ``db``.
+        ``db`` must be :class:`couchpy.database.Database` object. ``doc`` will
+        be converted to JSON structure before inserting it into the database.
+        If ``doc`` has a key by name the ``_id``, then the document will be
+        created with that ID, else, a new unique ID will be generated.
 
-        query parameters,
-        batch,
+        Optional arguments:
+
+        ``batch``,
             if specified 'ok', allow document store request to be batched
-            with others
+            with others.
 
-        Return,
-            Document object
-        Admin-prev,
-            No
+        Return :class:`Document` object
+
+        Admin-prev, No
         """
         id_ = [ doc['_id'] ] if '_id' in doc else []
         if not self.validate_docid(id_) : 
@@ -431,18 +430,18 @@ class Document( object ) :
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
-        """Delete a document in the specified database. `doc` can be
-        document-id or it can be Document object, in which case the object is
-        not valid after deletion.
+        """Delete a document ``doc`` from the specified database ``db``.
+        ``db`` must be :class:`couchpy.database.Database` object.
+        `doc` can be document-id or it can be :class:`Document` object,
+        in which case the object is not valid after deletion.
 
-        query parameters,
-        rev,
-            the current revision of the document.
+        Optional arguments:
 
-        Return,
-            JSON converted object as returned by CouchDB
-        Admin-prev,
-            No
+        ``rev``,
+            the current revision of the document, if not specified, ``doc``
+            must be a `Document` object whose ``_rev`` key will be used.
+
+        Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + id_
@@ -452,14 +451,13 @@ class Document( object ) :
     @classmethod
     def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
         """Copy a source document to a destination, specified by
-        `toid` and optional revision `asrev`. If the source document's
+        ``toid`` and optional revision ``asrev``. If the source document's
         revision `rev` is not provided as key-word argument, then the latest
         revision of the document will be used.
 
-        Return,
-            On success, destination's Document object, else None
-        Admin-prev,
-            No
+        On success, return destination's `Document` object, else None.
+
+        Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
@@ -489,46 +487,22 @@ class Document( object ) :
 class LocalDocument( Document ) :
 
     def __init__( self, db, doc, hthdrs={}, **query ) :
+        """Same as that of :class:`Document`, except that the
+        document will be interperted as local to the database.
+
+        Refer to, :func:`Document.__init__`
         """
-        Read the local document specified by doc, which can be either
-        a dictionary
-        containing `_id` key or a string to be interpreted as `_id` from
-        database `db`. Optionally accepts HTTP headers `hthdrs`.
-
-        query parameters,
-
-        rev,
-            Specify the revision to return
-        revs,
-            Return a list of the revisions for the document
-        revs_info,
-            Return a list of detailed revision information for the document
-
-        Return,
-            Document object
-        Admin-prev,
-            No
-        """
-        Document.__init__( self, db, doc, hthdrs={}, **query )
+        Document.__init__( self, db, doc, hthdrs=hthdrs, **query )
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = self.id2name( id_ )
         self.paths = db.paths + [ '_local',  id_ ]
 
     @classmethod
     def create( cls, db, doc, hthdrs={}, **query ) :
-        """Create a new local document in the specified database, using the
-        supplied JSON document structure. Unlike for Document objects, the
-        JSON structure must include _id field.
+        """Same as that of :class:`Document`, except that the
+        document will be interperted as local to the database.
 
-        query parameters,
-        batch,
-            if specified 'ok', allow document store request to be batched
-            with others
-
-        Return,
-            LocalDocument object
-        Admin-prev,
-            No
+        Refer to, :func:`Document.create`
         """
         id_ = doc['_id']
         if not self.validate_docid(id_) : 
@@ -541,18 +515,10 @@ class LocalDocument( Document ) :
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
-        """Delete a document in the specified database. `doc` can be
-        document-id or it can be Document object, in which case the object is
-        not valid after deletion.
+        """Same as that of :class:`.Document`, except that the
+        document will be interperted as local to the database.
 
-        query parameters,
-        rev,
-            the current revision of the document.
-
-        Return,
-            JSON converted object as returned by CouchDB
-        Admin-prev,
-            No
+        Refer to, :func:`Document.delete`
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ '_local', id_ ]
@@ -561,15 +527,10 @@ class LocalDocument( Document ) :
 
     @classmethod
     def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
-        """Copy a source document to a destination, specified by
-        `toid` and optional revision `asrev`. If the source document's
-        revision `rev` is not provided as key-word argument, then the latest
-        revision of the document will be used.
+        """Same as that of :class:`.Document`, except that the
+        document will be interperted as local to the database.
 
-        Return,
-            On success, destination's Document object, else None
-        Admin-prev,
-            No
+        Refer to, :func:`Document.copy`
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),

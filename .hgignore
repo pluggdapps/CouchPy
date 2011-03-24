@@ -3,13 +3,14 @@ syntax: glob
 *.pyc
 *.swp
 *~
-pluggd-env
+couchpy-env
+docs/_build/
 .vim_maindev
 .vim_templates
 .vim_doc
 yacctab.py
 lextab.py
-bootstrap.egg-info/
+couchpy.egg-info/
 ./build/
 ./dist/
 # switch to regexp syntax.

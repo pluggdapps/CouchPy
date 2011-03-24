@@ -319,7 +319,7 @@ class Client( object ) :
         return d
 
     def all_dbs( self, hthdrs={} ) :
-        """Returns a list of all the databases as
+        """Return a list of all the databases as
         :class:`couchpy.database.Database` objects from the CouchDB server.
 
         Admin-Prev, No
@@ -330,7 +330,7 @@ class Client( object ) :
         return [ Database( self, n, debug=debug) for n in d ] if d else []
 
     def restart( self, hthdrs={} ) :
-        """Restarts the CouchDB instance. You must be authenticated as a user
+        """Restart the CouchDB instance. You must be authenticated as a user
         with administration privileges for this to work. Returns a Boolean,
         indicating success or failure
 
@@ -341,7 +341,7 @@ class Client( object ) :
         return d['ok'] if (s==OK) else False
 
     def stats( self, *paths, **kwargs ) :
-        """Returns a JSON converted object containting the statistics for the
+        """Return a JSON converted object containting the statistics for the
         CouchDB server. The object is structured with top-level sections
         collating the statistics for a range of entries, with each individual
         statistic being easily identified, and the content of each statistic
@@ -359,7 +359,7 @@ class Client( object ) :
         return d
 
     def uuids( self, count=None, hthdrs={} ) :
-        """Returns ``count`` number of uuids, generted by the server. These uuid
+        """Return ``count`` number of uuids, generted by the server. These uuid
         can be used to compose document ids.
         """
         q =  { 'count' : count } if isinstance(count, (int,long)) else {}
@@ -403,7 +403,7 @@ class Client( object ) :
         return d
 
     def log( self, bytes=None, offset=None, hthdrs={} ) :
-        """Gets the CouchDB log, equivalent to accessing the local log file of
+        """Get CouchDB log, equivalent to accessing the local log file of
         the corresponding CouchDB instance. When you request the log, the
         response is returned as plain (UTF-8) text, with an HTTP Content-type
         header as text/plain. Returns a stream of text bytes.

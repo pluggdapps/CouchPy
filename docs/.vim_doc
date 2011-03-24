@@ -25,6 +25,8 @@ nmap g :cs find g =expand("<cword>")
 nmap s :cs find s =expand("<cword>")	
 map Q gq
 map Y y$
+nmap <silent> \aocom :AlignPush:AlignCtrl g /[*/]\acom:AlignPop
+nmap <silent> \t@ :AlignCtrl mIp1P1=l @:'a,.Align
 vmap \ev <Plug>Spchkev
 nmap \ec <Plug>LoadSpchk
 map \rwp <Plug>RestoreWinPosn
@@ -69,9 +71,7 @@ vmap <silent> \T, :<BS><BS><BS>ma'>\T,
 vmap <silent> \T| :<BS><BS><BS>ma'>\T|
 map <silent> \tdW@ :AlignCtrl v ^\s*/[/*]:AlignCtrl mWp1P1=l @:'a,.Align
 map <silent> \tW@ :AlignCtrl mWp1P1=l @:'a,.Align
-nmap <silent> \t@ :AlignCtrl mIp1P1=l @:'a,.Align
 omap <silent> \t@ :AlignCtrl mIp1P1=l @:'a,.Align
-nmap <silent> \aocom :AlignPush:AlignCtrl g /[*/]\acom:AlignPop
 omap <silent> \aocom :AlignPush:AlignCtrl g /[*/]\acom:AlignPop
 nmap \rfco :!grep Obsoletes.* /import/tech/rfc/* 
 nmap \rfc :tabnew /import/tech/rfc/rfc.txt 
@@ -174,13 +174,13 @@ if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''
   let s:wipebuf = bufnr('%')
 endif
 set shortmess=aoO
-badd +26 index.rst
+badd +23 index.rst
 badd +2 modules/attachment.rst
-badd +0 conf.py
-badd +0 _templates/layout.html
+badd +1 conf.py
+badd +1 _templates/layout.html
 badd +10 modules/client.rst
 badd +1 modules/httpc.rst
-badd +3 modules/database.rst
+badd +10 modules/database.rst
 badd +1 modules/doc.rst
 badd +4 modules/designdoc.rst
 badd +9 modules/query.rst
@@ -290,7 +290,7 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 142 - ((23 * winheight(0) + 23) / 46)
+let s:l = 142 - ((24 * winheight(0) + 23) / 47)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
@@ -404,7 +404,7 @@ exe s:l
 normal! zt
 23
 normal! 07l
-tabedit modules/database.rst
+tabedit modules/client.rst
 set splitbelow splitright
 set nosplitbelow
 set nosplitright
@@ -506,12 +506,12 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 10 - ((9 * winheight(0) + 23) / 46)
+let s:l = 13 - ((12 * winheight(0) + 23) / 46)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-10
-normal! 021l
+13
+normal! 016l
 tabedit _templates/layout.html
 set splitbelow splitright
 set nosplitbelow

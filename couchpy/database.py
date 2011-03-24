@@ -11,7 +11,7 @@ Create a client object,
 import sys, re
 from   copy         import deepcopy
 
-import couchpy.rest
+import couchpy.rest       as rest
 from   couchpy.httperror  import *
 from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy.client     import Client
@@ -249,7 +249,7 @@ class Database( object ) :
         self.info = {}
 
     def __call__( self ) :
-        """Returns information about this database, refer to ``GET /db`` API
+        """Return information about this database, refer to ``GET /db`` API
         from CouchDB to know the structure of information. 
 
         Admin-Prev, No
@@ -318,7 +318,7 @@ class Database( object ) :
             return False
 
     def changes( self, hthdrs={}, **query ) :
-        """Obtains a list of changes done to the database. This can be
+        """Obtain a list of changes done to the database. This can be
         used to monitor for update and modifications to the database for post
         processing or synchronization. Returns JSON converted changes objects,
         and the last update sequence number, as returned by CouchDB. Refer to
@@ -392,21 +392,18 @@ class Database( object ) :
         return None
 
     def ensurefullcommit( self, hthdrs={} ) :
-        """Commits any recent changes to the specified database to disk. You
-        should call this if you want to ensure that recent changes have been
-        written.
-        
-        Returns,
-            JSON converted object as returned by CouchDB
-        Admin-prev
-            No
+        """Commit recent changes to disk. You should call this if you want to
+        ensure that recent changes have been written. Return JSON converted
+        object as returned by CouchDB.
+
+        Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_ensure_full_commit'])
         s, h, d = _ensure_full_commit( conn, paths, hthdrs=hthdrs )
         return d
 
     def bulkdocs( self, docs=[], atomic=False, hthdrs={}, ) :
-        """The bulk document API allows you to create and update multiple
+        """Bulk document API allows you to create and update multiple
         documents at the same time within a single request. The basic
         operation is similar to creating or updating a single document, except
         that you batch the document structure and information. When
@@ -417,28 +414,25 @@ class Database( object ) :
         `_deleted` field with a value of true to each docment ID/revision
         combination within the submitted JSON structure.
 
-        Return,
-            JSON converted object as returned by CouchDB. It depends on
-            whether atomic is True or False. Refer to CouchDB API reference
-            manual for more information.
-        Admin-prev,
-            No
+        Return JSON converted object as returned by CouchDB. It depends on
+        whether atomic is True or False. Refer to ``POST /<db>/_bulk_docs``
+        section in CouchDB API reference manual for more information.
+
+        Admin-prev, No
         """
         conn, paths, h = self.conn, (self.paths + ['_bulk_docs']), hthdrs
         s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths=paths, hthdrs=h )
         return d
 
     def tempview( self, designdoc, hthdrs={}, **query ) :
-        """Creates (and executes) a temporary view based on the view function
-        supplied in the JSON request.
+        """Create (and execute) a temporary view based on the view function
+        supplied in the JSON request. This API accepts the same query
+        parameters supported by _view API.  Returns JSON converted object as
+        returned by CouchdB. Refer to ``POST /<db>/_temp_view`` and
+        ``GET  /<db>/_design/<design-doc>/_view/<view-name>``
+        sections in CouchDB API reference manual for more information.
 
-        query parameter,
-        Same as that of permanent view API
-
-        Return,
-            JSON converted object as returned by CouchdB
-        Admin-prev,
-            Yes
+        Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_temp_view'])
         s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
@@ -456,74 +450,80 @@ class Database( object ) :
         To reclaim disk space, you should run a database compact operation.
 
         Either pass a JSON convertible object that will be directly sent as
-        request body or, pass in document-id and a corresponding revision list
-        or just a Document object.
+        request body or, pass document-id and a corresponding revision list
+        or just a Document object. Returns JSON converted object as returned
+        by CouchDB
 
-        Return,
-            JSON converted object as returned by CouchDB
+        >>> d = { "FishStew" : [ "17-b3eb5ac6fbaef4428d712e66483dcb79" ] }
+        >>> revs = [ '17-b3eb5ac6fbaef4428d712e66483dcb79' ]
+        >>> db.purge( 'Fishstew', revs=revs )
+        >>> db.purge( d )
+        >>> db.purge( doc )
+
         Admin-prev
             No
         """
         conn, paths = self.conn, (self.paths + ['_purge'])
         if isinstance(doc, dict) :
-            body = rest.data2json(doc)
+            body = doc
         else :
             _id = doc._id if isinstance(doc, Document) else doc
             revs = [ doc._rev ] if revs == None else revs
-            body = rest.data2json({ _id : revs })
+            body = { _id : revs }
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
     def docs( self, keys=None, hthdrs={}, _q={}, **query ) :
-        """Returns a JSON structure of all of the documents in a given
-        database. The information is returned as a JSON structure containing
+        """Return a JSON structure of all of the documents in a given database.
+        The information is returned as a JSON structure containing
         meta information about the return structure, and the list documents
         and basic contents, consisting the ID, revision and key. The key is
-        generated from the document ID.
+        generated from the document ID. Refer to ``POST /<db>/_all_docs`` from
+        CouchDB API manual for more information.
 
-        If optional key-word argument `keys` is passes, specifying a list of
+        If optional key-word argument `keys` is passed, specifying a list of
         document ids, only those documents will be fetched and returned.
 
-        query parameters, if keys=None
-        descending,
+        query parameters are similar to that of views.
+
+        ``descending``,
             Return the documents in descending by key order.
-        endkey,
+        ``endkey``,
             Stop returning records when the specified key is reached.
-        endkey_docid,
+        ``endkey_docid``,
             Stop returning records when the specified document ID is reached.
-        group,
+        ``group``,
             Group the results using the reduce function to a group or single
             row.
-        group_level,
+        ``group_level``,
             Description Specify the group level to be used.
-        include_docs,
+        ``include_docs``,
             Include the full content of the documents in the response.
-        inclusive_end,
+        ``inclusive_end``,
             Specifies whether the specified end key should be included in the
             result.
-        key,
+        ``key``,
             Return only documents that match the specified key.
-        limit,
+        ``limit``,
             Limit the number of the returned documents to the specified
             number.
-        reduce,
+        ``reduce``,
             Use the reduction function.
-        skip,
+        ``skip``,
             Skip this number of records before starting to return the results.
-        stale,
+        ``stale``,
             Allow the results from a stale view to be used.
-        startkey,
+        ``startkey``,
             Return records starting with the specified key
-        startkey_docid,
+        ``startkey_docid``,
             Return records starting with the specified document ID.
-        update_seq,
+        ``update_seq``,
             Include the update sequence in the generated results,
 
         Alternately, query parameters can be passes as a dictionary or Query
-        object to key-word argument `_q`.
+        object to key-word argument ``_q``.
 
-        Admin-prev
-            No
+        Admin-prev, No
         """
         conn, paths, h = self.conn, (self.paths + ['_all_docs']), hthdrs
         q = dict( _q.items() )
@@ -532,16 +532,18 @@ class Database( object ) :
         return d
 
     def missingrevs( self ) :
-        """TODO : To be implemented"""
+        """TBD : To be implemented"""
 
     def revsdiff( self ) :
-        """TODO : To be implemented"""
+        """TBD : To be implemented"""
 
     def security( self, obj=None, hthdrs={} ) :
-        """TODO : To be implemented"""
+        """TBD : To be implemented"""
 
     def revslimit( self, limit=None, hthdrs={} ) :
-        """Gets or Set the current revs_limit (revision limit) for database."""
+        """Get or Set the current revs_limit (revision limit) for database.
+        To set revs_limit, pass the value as key-word argument ``limit``
+        """
         conn, paths = self.conn, (self.paths + ['_revs_limit'])
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
@@ -549,35 +551,34 @@ class Database( object ) :
     def createdoc( self, docs=None, localdocs=None, designdocs=None,
                    filepaths=[], hthdrs={}, **query ) :
         """Create one or more document in this database. Documents can be of
-            Normal documents
-            Local documents
-            Design document
-        Optionally provide a list of file-paths to be added as attachments to
+        Normal documents, Local documents Design document.
+
+        Optionally, provide a list of file-paths, to be added as attachments to
         the document, HTTP headers, and query parameters,
 
         query parameters, for normal documents / local documents
-        batch,
+
+        ``batch``,
             if specified 'ok', allow document store request to be batched with
             other
 
-        Return,
-            Document object (or) LocalDocument object (or)
-            DesignDocument object
-        Admin-prev,
-            No
+        Return Document object (or) LocalDocument object (or) DesignDocument
+        object.
+
+        Admin-prev, No
         """
         h, q, f = hthdrs, query, filepaths
         r = None
-        if docs != None and isinstance(docs, (list, tuple)) :
+        if docs != None and isinstance( docs, (list, tuple) ) :
             r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
         elif docs != None :
             r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
-        elif localdocs != None and isinstance(localdocs, (list, tuple)) :
-            r = [ LocalDocument.create(self, doc, hthdrs=h, **q) 
+        elif localdocs != None and isinstance( localdocs, (list, tuple) ) :
+            r = [ LocalDocument.create(self, doc, hthdrs=h, **q)
                   for doc in localdocs ]
         elif localdocs != None :
             r = LocalDocument.create( self, localdocs, hthdrs=h, **q )
-        elif designdocs != None and isinstance(designdocs, (list,tuple)) :
+        elif designdocs != None and isinstance( designdocs, (list,tuple) ) :
             r = [ DesignDocument.create(self, doc, hthdrs=h) 
                   for doc in designdocs ]
         elif designdocs != None :
@@ -586,22 +587,16 @@ class Database( object ) :
 
     def deletedoc( self, docs=None, localdocs=None, designdocs=None,
                    rev=None, hthdrs={} ) :
-        """Deletes one or more documents from the database and all the
-        attachments contained in the document(s). Documents can be
-        of,
-            Normal documents
-            Local documents,
-            Design documents
-        and all the
+        """Delete one or more documents from the database and all the
+        attachments contained in the document(s). Documents can be of,
+        Normal documents, Local documents, Design documents.
+
         When deleting single document, key-word argument `rev` (current revision
         of the document) should be specified.
         When deleting multiple documents, `docs` must be a list of tuples,
-        (docid, document-revision)
+        [ (docid, document-revision), ... ]
 
-        Return,
-            None
-        Admin-Prev,
-            No
+        Admin-Prev, No
         """
         h = hthdrs
         if docs != None and isinstance(docs, (list, tuple)) :
@@ -621,12 +616,11 @@ class Database( object ) :
         return None
 
     def localdocs( self, keys=None, hthdrs={}, **query ) :
-        """Return a list of local documentation ids, internally, query
-        parameters,
-            startkey="_local/",
-            endkey="_local0"
-        will be used to fetch the local documents. Other query parameters can
-        be passed as key-word arguments.
+        """Return a list of local documentat ids, internally, query
+        parameters, ``startkey=_local/`` and ``endkey=_local0`` will be used
+        to fetch the local documents.
+        Other query parameters similar to that of view, can be passed as
+        key-word arguments.
         """
         q = Query( startkey="_local/", endkey="_local0" )
         q.update( **query )
@@ -636,10 +630,10 @@ class Database( object ) :
     def designdocs( self, keys=None, hthdrs={}, **query ) :
         """Return a list of design documentation ids, internally, query
         parameters,
-            startkey="_design/",
-            endkey="_design0"
-        will be used to fetch the design documents. Other query parameters can
-        be passed as key-word arguments.
+        parameters, ``startkey=_design/`` and ``endkey=_design0`` will be used
+        to fetch the design documents.
+        Other query parameters similar to that of view, can be passed as
+        key-word arguments.
         """
         q = Query( startkey="_design/", endkey="_design0" )
         q.update( **query )
@@ -647,15 +641,13 @@ class Database( object ) :
         return map( lambda x : x['id'], d['rows'] )
 
     def copydoc( self, docid, rev, toid, asrev=None, hthdrs={} ) :
-        """Copy the specified document `docid` from `revision` to document
-        `toid` as revision `asrev`. `docid` should specify the source document
-        id, based on the id.
+        """Copy the specified document ``docid`` from revision ``rev`` to
+        document ``toid`` as revision ``asrev``.
 
-        Return,
-            On success, destination's document object, which can be of the
-            time Document or LocalDocument or DesignDocument, else None
-        Admin-prev,
-            No
+        On success, return destination Document object, which can be of the
+        type Document or LocalDocument or DesignDocument, else None.
+
+        Admin-prev, No
         """
         h = hthdrs
         if docid.startswith( '_local' ) :
