@@ -49,7 +49,7 @@ def _createdb( conn, paths=[], hthdrs={} ) :
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
     s, h, d = conn.put( paths, hthdrs, None )
-    if s == OK and d['ok'] == True :
+    if s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -698,7 +698,7 @@ class Database( object ) :
         """
         conn, paths = client.conn, (client.paths + [ dbname ])
         s, h, d = _createdb( conn, paths, hthdrs=hthdrs )
-        if s == OK and d["ok"] == True :
+        if d != None :
             return Database( client, dbname, hthdrs=hthdrs )
         else :
             return None

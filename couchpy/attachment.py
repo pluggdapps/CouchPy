@@ -1,6 +1,7 @@
 """Module provides provides a convinient class :class:`Attachment` to access (Create,
 Read, Delete) document attachments."""
 
+from   os.path          import basename
 from   copy             import deepcopy
 from   mimetypes        import guess_type
 import base64
@@ -60,6 +61,7 @@ class Attachment( object ) :
         the instance.
         """
         self.doc = doc
+        self.db = doc.db
         self.filename = filename
 
     def attachinfo( self, field=None ) :
@@ -67,8 +69,9 @@ class Attachment( object ) :
         key-word argument is provided, value of that particular field is
         returned, otherwise, entire dictionary of information is returned
         """
-        a = self.doc.doc.get( '_attachment', {} ).get( filename, None )
-        return a if field == None else a.get( field, None )
+        a = self.doc.doc.get( '_attachments', {} ).get( self.filename, {} )
+        val = a if field == None else a.get( field, None )
+        return val
 
     def data( self, hthdrs={} ) :
         """Returns the content of the file attached to the document. Can
@@ -94,7 +97,7 @@ class Attachment( object ) :
         paths = db.paths + [ id_, filename ]
         s, h, d = _readattach( db.conn, paths, hthdrs=hthdrs )
         content_type = h.get( 'Content-Type', None )
-        return (d, content_type)
+        return (d.getvalue(), content_type)
 
     @classmethod
     def putattachment( cls, db, doc, filename, data, content_type=None,
@@ -142,13 +145,13 @@ class Attachment( object ) :
                 ctype, fname = f
                 fdata = base64.encodestring( open(fname).read() )
                 attachs.setdefault(
-                        fname, { 'content_type' : ctype, 'data' : data }
+                    basename(fname), { 'content_type' : ctype, 'data' : data }
                 )
             elif isinstance(f, basestring) :
-                ctype = guess_type(f)
+                (ctype, enc) = guess_type(f)
                 fname, data = f, base64.encodestring( open(f).read() )
                 attachs.setdefault(
-                        fname, { 'content_type' : ctype, 'data' : data }
+                    basename(fname), { 'content_type' : ctype, 'data' : data }
                 )
         return attachs
 

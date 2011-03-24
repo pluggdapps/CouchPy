@@ -15,6 +15,7 @@ from   httperror          import *
 from   httpc              import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
+import rest
 
 # TODO :
 #   1. Batch mode POST / PUT should have a verification system built into it.
@@ -44,6 +45,7 @@ log = configlog( __name__ )
 """
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_ctypejs  = { 'Content-Type' : 'application/json' }
 
 def _createdoc( conn, doc, paths=[], hthdrs={}, **query ) :
     """POST /<db>/<doc>
@@ -53,8 +55,9 @@ def _createdoc( conn, doc, paths=[], hthdrs={}, **query ) :
     body = rest.data2json( doc )
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
+    hthdrs.update( hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
-    if s == OK and d['ok'] == True :
+    if s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -101,13 +104,14 @@ def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
     body = rest.data2json( doc )
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
+    hthdrs.update( hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body, _query=query.items() )
     if s == OK and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
 
-def _deletedoc( conn, doc, paths=[], hthdrs={}, **query ) :
+def _deletedoc( conn, paths=[], hthdrs={}, **query ) :
     """
     DELETE /<db>/<doc>
     DELETE /<db>/_local/<doc>
@@ -167,9 +171,9 @@ class Document( object ) :
 
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         self.paths = db.paths + [ id_ ]
-        s, h, d = _readdoc( self.conn, self.paths, hthdrs=hthdrs, **query
-                  ) if fetch == True else (None, None, {})
-        self.doc = d
+        s, h, doc = _readdoc( self.conn, self.paths, hthdrs=hthdrs, **query
+                    ) if fetch == True else (None, None, doc)
+        self.doc = doc
 
         self.revs = None        # Cached object
         self.revs_info = None   # Cached object
@@ -374,7 +378,7 @@ class Document( object ) :
     def attach( self, filename ) :
         """Return :class:`couchpy.attachment.Attachment` object for
         ``filename`` attachment stored under this document."""
-        a_ = self.doc.get( '_attachment', {} ).get( filename, None )
+        a_ = self.doc.get( '_attachments', {} ).get( filename, None )
         a = Attachment( self, filename ) if a_ else None
         return a
 
@@ -400,14 +404,21 @@ class Document( object ) :
         return s, h, d
 
     @classmethod
-    def create( cls, db, doc, attachfiles=[], hthdrs={}, **query ) :
+    def create( cls, db, doc, attachfiles=[], hthdrs={}, fetch=True, **query ) :
         """Create a new document ``doc`` in the specified database ``db``.
         ``db`` must be :class:`couchpy.database.Database` object. ``doc`` will
         be converted to JSON structure before inserting it into the database.
         If ``doc`` has a key by name the ``_id``, then the document will be
         created with that ID, else, a new unique ID will be generated.
+        To attach files in the document, pass a list of absolute filenames as
+        key-word argument to ``attachfiles``. Attachments will be stored
+        in the document using the file's `basename`.
 
         Optional arguments:
+
+        ``fetch``,
+            When true, the newly inserted document will be read back for its
+            `_id, `_rev` and `_attachments` values.
 
         ``batch``,
             if specified 'ok', allow document store request to be batched
@@ -418,15 +429,19 @@ class Document( object ) :
         Admin-prev, No
         """
         id_ = [ doc['_id'] ] if '_id' in doc else []
-        if not self.validate_docid(id_) : 
+        if not cls.validate_docid(id_) : 
             return None
-        paths = db.paths + id_
+        paths = db.paths
         attachs = Attachment.files2attach(attachfiles)
-        doc.update( '_attachments', attachs ) if attachs else None
+        if attachs :
+            attachs_ = doc.get('_attachments', {})
+            attachs_.update( attachs )
+            doc['_attachments'] = attachs_
         s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
-        doc.update({ '_id' : d['id'], '_rev' : d['rev'] })
-        return Document( db, doc, fetch=False )
+        if fetch != True :
+            doc.update({ '_id' : d['id'], '_rev' : d['rev'] })
+        return Document( db, doc, fetch=fetch )
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
@@ -445,7 +460,7 @@ class Document( object ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + id_
-        s, h, d = _deletedoc( db.conn, doc, paths, hthdrs, **query )
+        s, h, d = _deletedoc( db.conn, paths, hthdrs, **query )
         return d
 
     @classmethod
@@ -469,7 +484,7 @@ class Document( object ) :
         else :
             return None
 
-    SPECIAL_DOC_NAMES = set([
+    SPECIAL_DOC_NAMES = [
         '_all_docs',
         '_design',
         '_changes', '_compact',
@@ -478,9 +493,10 @@ class Document( object ) :
         '_missing_revs', '_revs_diff', '_revs_limit', 
         '_security',
         '_local',
-    ])
-    def validate_docid( self, docid ) :
-        return not (docid in SPECIAL_DOC_NAMES)
+    ]
+    @classmethod
+    def validate_docid( cls, docid ) :
+        return not (docid in cls.SPECIAL_DOC_NAMES)
 
 
 
@@ -505,7 +521,7 @@ class LocalDocument( Document ) :
         Refer to, :func:`Document.create`
         """
         id_ = doc['_id']
-        if not self.validate_docid(id_) : 
+        if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_local', id_ ]
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
@@ -522,7 +538,7 @@ class LocalDocument( Document ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ '_local', id_ ]
-        s, h, d = _deletedoc( db.conn, doc, paths, hthdrs, **query )
+        s, h, d = _deletedoc( db.conn, paths, hthdrs, **query )
         return d
 
     @classmethod

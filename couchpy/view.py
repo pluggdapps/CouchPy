@@ -3,6 +3,9 @@
 from   copy             import deepcopy
 from   couchpy.query    import Query
 
+hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_ctypejs  = { 'Content-Type' : 'application/json' }
+
 def _viewsgn( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     """
     GET  /<db>/_design/<design-doc>/_view/<view-name>,
@@ -20,6 +23,7 @@ def _viewsgn( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     """
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
+    hthdrs.update( hdr_ctypejs )
     if keys == None :
         s, h, d = conn.get( paths, hthdrs, None, _query=q.items() )
     else :

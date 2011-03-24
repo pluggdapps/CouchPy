@@ -37,6 +37,9 @@ from   couchpy.attachment import Attachment
 }
 """
 
+hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_ctypejs  = { 'Content-Type' : 'application/json' }
+
 def _readsgn( conn, paths=[], hthdrs={}, **query ) :
     """GET /<db>/_design/<doc>
     query,
@@ -59,6 +62,7 @@ def _updatesgn( conn, doc, paths=[], hthdrs={} ) :
     body = rest.data2json( doc )
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
+    hthdrs.update( hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body )
     if s == OK and d['ok'] == True :
         return s, h, d
@@ -66,7 +70,7 @@ def _updatesgn( conn, doc, paths=[], hthdrs={} ) :
         return (None, None, None)
 
 
-def _deletesgn( conn, doc, paths=[], hthdrs={}, **query ) :
+def _deletesgn( conn, paths=[], hthdrs={}, **query ) :
     """DELETE /<db>/_design/<doc>
     query,
         rev=<_rev>
@@ -115,6 +119,7 @@ def _showsgn( conn, paths=[], doc=None, hthdrs={}, **query ) :
     """
     hthdrs = deepcopy( hthdrs )
     hthdrs.update( hdr_acceptjs )
+    hthdrs.update( hdr_ctypejs )
     if doc == None :
         s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     else :
@@ -413,7 +418,7 @@ class DesignDocument( object ) :
             No
         """
         id_ = self.id2name( doc['_id'] )
-        if not self.validate_docid(id_) : 
+        if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_design', id_ ]
         s, h, d = _updatesgn( db.conn, doc, paths, hthdrs )
@@ -438,7 +443,7 @@ class DesignDocument( object ) :
         """
         id_ = self.id2name(doc if isinstance(doc, basestring) else doc['_id'])
         paths = db.paths + [ '_design', id_ ]
-        s, h, d = _deletesgn( db.conn, doc, paths, hthdrs, **query )
+        s, h, d = _deletesgn( db.conn, paths, hthdrs, **query )
         return d
 
     @classmethod
@@ -463,10 +468,11 @@ class DesignDocument( object ) :
         else :
             return None
 
-    SPECIAL_DOC_NAMES = set([
-    ])
-    def validate_docid( self, docid ) :
-        return not (docid in SPECIAL_DOC_NAMES)
+    SPECIAL_DOC_NAMES = [
+    ]
+    @classmethod
+    def validate_docid( cls, docid ) :
+        return not (docid in cls.SPECIAL_DOC_NAMES)
 
     def id2name( self, id_ ) :
         return id_[7:] if id_.startswith( '_design' ) else id_
