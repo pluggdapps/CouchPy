@@ -111,7 +111,6 @@ def test_uuids() :
     assert len(uuid) == 1
     assert int(uuid[0], 16)
     uuids = c.uuids(10)
-    print uuids
     assert len(uuids) == 10
     for uuid in uuids :
         assert int(uuid, 16)
@@ -139,7 +138,7 @@ def test_config() :
     [ c.delete(db.dbname) for db in c ]
 
     sections = c.config()
-    assert len(sections) == 10
+    assert len(sections) == 14
 
     for secname, section in sections.items() :
         assert section == c.config(secname)

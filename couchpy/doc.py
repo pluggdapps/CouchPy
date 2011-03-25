@@ -106,7 +106,7 @@ def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
     hthdrs.update( hdr_acceptjs )
     hthdrs.update( hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body, _query=query.items() )
-    if s == OK and d['ok'] == True :
+    if s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -138,7 +138,7 @@ def _copydoc( conn, paths=[], hthdrs={}, **query ) :
     if 'Destination' not in hthdrs :
         raise CouchPyError( '`Destination` header field not supplied' )
     s, h, d = conn.copy( paths, hthdrs, None, _query=query.items() )
-    if s == OK :
+    if s == CREATED :
         return s, h, d
     else :
         return (None, None, None)
@@ -253,33 +253,42 @@ class Document( object ) :
         elif revs == True :
             q = { 'revs' : 'true' }
             if self.revs :
-                s, h, d = _headdoc( conn, paths, hthdrs=h, **q )
-                if s == OK and h['Etag'] == self.doc['_rev'] :
+                s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
+                if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self.revs
-            s, h, d = _readdoc( conn, paths, hthdrs=h, **q )
+            s, h_, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs = d
             return self.revs
         elif revs_info == True :
             q = { 'revs_info' : 'true' }
             if self.revs_info :
-                s, h, d = _headdoc( conn, paths, hthdrs=h, **q )
-                if s == OK and h['Etag'] == self.doc['_rev'] :
+                s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
+                if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self.revs_info
-            s, h, d = _readdoc( conn, paths, hthdrs=h, **q )
+            s, h_, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs_info = d
             return self.revs_info
         else :
             if self.doc :
-                s, h, d = _headdoc( conn, paths, hthdrs=h )
-                if s == OK and h['Etag'] == self.doc['_rev'] :
+                s, h_, d = _headdoc( conn, paths, hthdrs=h )
+                if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self
-            s, h, d = _readdoc( conn, paths, hthdrs=h )
+            s, h_, d = _readdoc( conn, paths, hthdrs=h )
             self.doc = d
             return self
+
+    def __repr__( self ) :
+        _id = self.doc.get('_id', None)
+        _rev = self.doc.get('_rev', None)
+        return '<%s %r:%r>' % (type(self).__name__, _id, _rev)
 
     def items( self ) :
         """Return a list of (key,value) pairs in this document"""
         return self.doc.items()
+
+    def keys( self ) :
+        """Return a list of document keys"""
+        return self.doc.keys()
 
     def all( self ) :
         """Shortcut for,
@@ -293,7 +302,7 @@ class Document( object ) :
         """
         return self( revs=True )
 
-    def update( self, using={}, hthdrs={} ) :
+    def update( self, using={}, hthdrs={}, **query ) :
         """Update document ``using`` a dictionary.
         Updating the document using this interface will automatically PUT the
         document into the database. However, the following keys cannot be
@@ -348,12 +357,12 @@ class Document( object ) :
 
         Admin-prev, No
         """
-        data = open( filepath ).read()
         filename = basename( filepath )
+        data = open( filepath ).read()
         h = deepcopy( self.hthdrs )
         h.update( hthdrs )
         d = Attachment.putattachment(
-                self.db, self, filename, data, content_type=content_type,
+                self.db, self, filepath, data, content_type=content_type,
                 hthdrs=h, **query
             )
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None
@@ -459,8 +468,9 @@ class Document( object ) :
         Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        paths = db.paths + id_
-        s, h, d = _deletedoc( db.conn, paths, hthdrs, **query )
+        paths = db.paths + [ id_ ]
+        q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
     @classmethod
@@ -475,12 +485,12 @@ class Document( object ) :
         Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
+        dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev)
         hthdrs = { 'Destination' : dest }
         paths = db.paths + [ id_ ]
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
-            return Document( self.db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
+            return Document( db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
         else :
             return None
 
@@ -502,21 +512,34 @@ class Document( object ) :
 
 class LocalDocument( Document ) :
 
-    def __init__( self, db, doc, hthdrs={}, **query ) :
-        """Same as that of :class:`Document`, except that the
-        document will be interperted as local to the database.
+    def __init__( self, db, doc, fetch=True, hthdrs={}, **query ) :
+        """Same as that of :func:`Document.__init__`, except that the
+        document will be interperted as local to the database ``db``.
 
         Refer to, :func:`Document.__init__`
         """
-        Document.__init__( self, db, doc, hthdrs=hthdrs, **query )
+        # TODO : url-encode _id ???
+        self.db = db
+        self.conn = db.conn
+
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = self.id2name( id_ )
         self.paths = db.paths + [ '_local',  id_ ]
 
+        s, h, doc = _readdoc( self.conn, self.paths, hthdrs=hthdrs, **query
+                    ) if fetch == True else (None, None, doc )
+        self.doc = doc
+        self.revs = None        # Cached object
+        self.revs_info = None   # Cached object
+        self.client = db.client
+        self.debug = db.debug
+        self.hthdrs = hthdrs
+
     @classmethod
-    def create( cls, db, doc, hthdrs={}, **query ) :
-        """Same as that of :class:`Document`, except that the
-        document will be interperted as local to the database.
+    def create( cls, db, doc, attachfiles=[], hthdrs={}, fetch=True, **query ) :
+        """Same as that of :func:`Document.create`, except that the
+        document will be interperted as local to the database ``db``. ``doc``
+        must be dictionary of key,value pairs.
 
         Refer to, :func:`Document.create`
         """
@@ -524,37 +547,48 @@ class LocalDocument( Document ) :
         if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_local', id_ ]
+        attachs = Attachment.files2attach(attachfiles)
+        if attachs :
+            attachs_ = doc.get('_attachments', {})
+            attachs_.update( attachs )
+            doc['_attachments'] = attachs_
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
-        doc.update({ '_rev' : d['rev'] })
-        return LocalDocument( db, doc, fetch=False )
+        if fetch != True :
+            doc.update({ '_rev' : d['rev'] })
+        return LocalDocument( db, doc, fetch=fetch )
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
-        """Same as that of :class:`.Document`, except that the
-        document will be interperted as local to the database.
+        """Same as that of :func:`Document.delete`, except that the
+        document will be interperted as local to the database ``db``.
 
         Refer to, :func:`Document.delete`
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
+        id_ = id_[7:] if id_.startswith( '_local/' ) else id_
         paths = db.paths + [ '_local', id_ ]
-        s, h, d = _deletedoc( db.conn, paths, hthdrs, **query )
+        q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
     @classmethod
     def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
-        """Same as that of :class:`.Document`, except that the
-        document will be interperted as local to the database.
+        """Same as that of :func:`Document.copy`, except that the
+        document will be interperted as local to the database ``db``.
 
         Refer to, :func:`Document.copy`
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
+        dest = toid if asrev == None else "_local/%s?rev=%s" % (toid, asrev)
         hthdrs = { 'Destination' : dest }
+        id_ = id_[7:] if id_.startswith( '_local/' ) else id_
         paths = db.paths + [ '_local', id_ ]
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
-            return LocalDocument( self.db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
+            id_ = d['id']
+            id_ = id_[7:] if id_.startswith( '_local/' ) else id_
+            return LocalDocument( db, id_, hthdrs=hthdrs )
         else :
             return None
 

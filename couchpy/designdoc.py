@@ -342,7 +342,7 @@ class DesignDocument( object ) :
         data = open( filepath ).read()
         filename = basename( filepath )
         d = Attachment.putattachment(
-                self.db, self, filename, data, content_type=content_type,
+                self.db, self, filepath, data, content_type=content_type,
                 hthdrs=hthdrs, **query
             )
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None

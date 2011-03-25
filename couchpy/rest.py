@@ -69,7 +69,7 @@ class ReSTful(object) :
             status, headers, data
         """
         s, h, d = self._request('HEAD', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
+        d = self._jsonloads( h, d ) if d != None else d
         return s, h, d
 
     def get( self, paths, hdrs, body, _query=[] ) :

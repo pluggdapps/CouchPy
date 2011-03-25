@@ -178,7 +178,7 @@ class HttpSession( object ) :
 
         # For large or chunked response bodies, do not buffer the full body,
         # and instead return a minimal file-like object
-        else:
+        else :
             fn = lambda: self.release_connection(url, conn)
             data = ResponseBody(resp, fn)
             streamed = True
@@ -375,6 +375,11 @@ class ResponseBody( object ) :
     def close( self ) :
         while not self.resp.isclosed() : self.read(CHUNK_SIZE)
         self.callback()
+
+    def getvalue( self ) :
+        content = self.resp.read()
+        self.close()
+        return content
 
     def __iter__( self ) :
         assert self.resp.msg.get('transfer-encoding') == 'chunked'

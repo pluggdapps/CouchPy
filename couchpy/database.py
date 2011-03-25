@@ -293,11 +293,11 @@ class Database( object ) :
 
     def __eq__( self, other ) :
         if not isinstance( other, Database ) : return False
-        if self.name == other.name : return True
+        if self.dbname == other.dbname : return True
         return False
 
     def __repr__( self ) :
-        return '<%s %r>' % (type(self).__name__, self.name)
+        return '<%s %r>' % (type(self).__name__, self.dbname)
 
     def __contains__( self, docid ) :
         """Return whether the document identified by ``docid`` is present in
@@ -614,18 +614,6 @@ class Database( object ) :
         elif designdocs != None :
             DesignDocument.delete(self, designdocs, hthdrs=h, rev=rev)
         return None
-
-    def localdocs( self, keys=None, hthdrs={}, **query ) :
-        """Return a list of local documentat ids, internally, query
-        parameters, ``startkey=_local/`` and ``endkey=_local0`` will be used
-        to fetch the local documents.
-        Other query parameters similar to that of view, can be passed as
-        key-word arguments.
-        """
-        q = Query( startkey="_local/", endkey="_local0" )
-        q.update( **query )
-        d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
-        return map( lambda x : x['id'], d['rows'] )
 
     def designdocs( self, keys=None, hthdrs={}, **query ) :
         """Return a list of design documentation ids, internally, query

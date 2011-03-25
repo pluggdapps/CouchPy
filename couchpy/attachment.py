@@ -1,14 +1,14 @@
 """Module provides provides a convinient class :class:`Attachment` to access (Create,
 Read, Delete) document attachments."""
 
-from   os.path          import basename
-from   copy             import deepcopy
-from   mimetypes        import guess_type
+from   os.path              import basename
+from   copy                 import deepcopy
+from   mimetypes            import guess_type
 import base64
 
-from   httperror        import *
-from   httpc            import HttpSession, ResourceNotFound, OK, CREATED
-from   couchpy          import CouchPyError
+from   httperror            import *
+from   httpc                import HttpSession, ResourceNotFound, OK, CREATED
+from   couchpy              import CouchPyError
 
 # TODO :
 #   1. URL-encoding for attachment file-names
@@ -64,6 +64,12 @@ class Attachment( object ) :
         self.db = doc.db
         self.filename = filename
 
+    def __eq__( self, other ) :
+        """Compare whether the attachment info and data are same"""
+        cond = self.doc._id == other.doc._id and self.doc._rev == self.doc._rev
+        cond = cond and self.attachinfo() == other.attachinfo()
+        return cond
+
     def attachinfo( self, field=None ) :
         """Information from attachment stub in the document. If `field`
         key-word argument is provided, value of that particular field is
@@ -100,22 +106,28 @@ class Attachment( object ) :
         return (d.getvalue(), content_type)
 
     @classmethod
-    def putattachment( cls, db, doc, filename, data, content_type=None,
+    def putattachment( cls, db, doc, filepath, data, content_type=None,
                        hthdrs={}, **query ) :
         """Upload the supplied content (data) as attachment to the specified
-        document (doc). `filename` provided must be a URL encoded string.
+        document (doc). `filepath` provided must be a URL encoded string.
         If `doc` is document-id, then `rev` keyword parameter should be
         present in query.
         """
+        from   couchpy.doc          import Document
+        from   couchpy.designdoc    import DesignDocument
+        filename = basename( filepath )
         id_ = doc if isinstance(doc, basestring) else doc._id
         rev = query['rev'] if 'rev' in query else doc._rev
         paths = db.paths + [ id_, filename ]
         hthdrs = deepcopy( hthdrs )
+        (ctype, enc) = guess_type(filepath)
         hthdrs.update(
-            {'Content-Type' : content_type} if content_type != None else {}
+            { 'Content-Type' : content_type
+            } if content_type != None else { 'Content-Type' : ctype }
         )
+        hthdrs.update( {'Content-Length' : len(data)} if data else {} )
         s, h, d = _writeattach( db.conn, paths, data, hthdrs=hthdrs, rev=rev )
-        if isinstance(doc, Document) and d != None :
+        if isinstance( doc, (Document,DesignDocument) ) and d != None :
             doc.update({ '_rev' : d['rev'] })
         return d
 
