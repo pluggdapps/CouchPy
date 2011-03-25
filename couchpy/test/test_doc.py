@@ -66,8 +66,8 @@ def test_access_document() :
 
     # Fetch
     doc1 = Document( db, 'testdoc1' )
-    assert ('_id', 'testdoc1') in doc1.doc.items()
-    assert ('value', 1000) in doc1.doc.items()
+    assert ('_id', 'testdoc1') in doc1.items()
+    assert ('value', 1000) in doc1.items()
     # Update
     doc1.update({ 'value' : 1001 })
     assert doc1.doc['value'] == 1001 and doc1._rev.startswith('2-')
@@ -168,6 +168,7 @@ def test_attachments() :
     refdoc1 = _makedoc( _id='testdoc1', value=1000 )
     doc = Document.create( db, refdoc1 )
 
+    # Add attachment
     a1 = doc.addattach(files[0])
     doc()
     data = open( files[0] ).read()
@@ -183,6 +184,11 @@ def test_attachments() :
     attachs = doc.attachs()
     assert (attachs[0] == a1 or attachs[0] == a2) and \
            (attachs[1] == a1 or attachs[1] == a2)
+
+    # Delete attachment
+    filename = a2.filename
+    doc.delattach( choice([ a2, a2.filename ]) )
+    assert doc.attach( filename ) == None
 
     [ c.delete(db.dbname) for db in c ]
 

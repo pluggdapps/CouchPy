@@ -2,6 +2,59 @@
 Fortunately, JSON formated objects can easily be converted to native python
 objects. Document class defines a collection of attributes and methods to
 access CouchDB documents.
+
+>>> c = Client()
+>>> db = c.create( 'testdb' )
+
+Create a document by name 'Fishstew', with a list of `files` attached to it.
+
+>>> doc = { _id='Fishstew' }
+>>> doc = Document.create( db, doc, attachfiles=files )
+>>> doc1 = { _id='ChickenTikaa' }
+>>> doc1 = Document.create( db, 'ChickenTikaa', attachfiles=files, batch='ok' )
+
+Fetch document,
+
+>>> doc = Document( db, 'Fishstew' )               # Fetch latest revision
+>>> doc = Document( db, 'Fishstew', rev=u'1-1eb6f37b091a143c69ed0332de74df0b' # Fetch a particular revision
+>>> revs = Document( db, doc, revs=True )          # Fetch revision list
+>>> revsinfo = Document( db, doc, revs_info=True ) # Fetch extended revisions
+
+Access document object,
+
+>>> doc['tag'] = 'seafood'      # Create / update a new field 
+>>> doc['tag']                  # Access key, value pair
+seafood
+>>> doc._id                     # Document ID
+Fishstew
+>>> doc._rev                    # Document Revision
+u'1-1eb6f37b091a143c69ed0332de74df0b'
+>>> doc.items()                 # List of (key,value) pairs
+[(u'_rev', u'1-1eb6f37b091a143c69ed0332de74df0b'), (u'_id', u'Fishstew'), (u'tag', u'seafood')]
+>>> doc.update({ 'key1' : 'value1' })
+>>> [ (k,v) for k,v in doc ]    # Same as doc.items()
+>>> doc.delitem( 'key1' )       # Delete key,value pair
+>>> del doc['key1']             # Same as doc.delitem
+
+Manage document attachments,
+
+>>> a = doc.addattach( '/home/user/recipe.txt' )  # Attach file to document
+>>> doc.delattach( a )                            # Delete attachment
+>>> doc.attachs()                                 # Get a list of Attachment objects
+>>> a = doc.attach( 'recipe.txt' )
+>>> a.filename                      # Attachment filename 
+receipe.txt
+>>> a.data()
+( ... file content ..., text/plain )
+
+Delete document,
+
+>>> Document.delete( db, doc1 )
+
+Copy document,
+
+>>> bkpdoc = Document.copy( db, doc._id, 'Fishstew-bkp', rev=doc._rev )
+
 """
 
 import sys, re, json, time
