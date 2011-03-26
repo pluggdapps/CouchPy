@@ -160,7 +160,7 @@ class DesignDocument( object ) :
         self.conn = db.conn
 
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        id_ = self.id2name( id_ )
+        id_ = self.id2name(id_)
         self.paths = db.paths + [ '_design', id_ ]
         s, h, d = _readsgn( self.conn, self.paths, hthdrs=hthdrs, **query
                   ) if fetch == True else (None, None, {})
@@ -417,7 +417,7 @@ class DesignDocument( object ) :
         Admin-prev,
             No
         """
-        id_ = self.id2name( doc['_id'] )
+        id_ = self.id2name(doc['_id'])
         if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_design', id_ ]
@@ -441,7 +441,8 @@ class DesignDocument( object ) :
         Admin-prev,
             No
         """
-        id_ = self.id2name(doc if isinstance(doc, basestring) else doc['_id'])
+        id_ = doc if isinstance(doc, basestring) else doc['_id']
+        id_ = self.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
         s, h, d = _deletesgn( db.conn, paths, hthdrs, **query )
         return d
@@ -458,7 +459,8 @@ class DesignDocument( object ) :
         Admin-prev,
             No
         """
-        id_ = self.id2name(doc if isinstance(doc, basestring) else doc['_id'])
+        id_ = doc if isinstance(doc, basestring) else doc['_id']
+        id_ = self.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
         hthdrs = { 'Destination' : dest }

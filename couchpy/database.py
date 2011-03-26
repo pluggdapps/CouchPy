@@ -26,10 +26,7 @@ from   couchpy.query      import Query
 #
 # TODO :
 #   1. _changes, 'longpoll' and 'continuous' modes are not yet supported.
-#   2. _bulk_docs, needs to be updated.
-#   3. _missing_revs API to be implemented
-#   4. _revs_diff API to be implemented
-#   5. _security API to be implemented
+#   3. _missing_revs, _revs_diff, _security
 #   6. Should we provide attachment facilities for local docs ?
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
@@ -233,9 +230,10 @@ class Database( object ) :
 
     def __init__( self, client, dbname, **kwargs ) :
         """Instantiate the database object corresponding to ``dbname`` in
-        CouchdDB server provided by ``client``.
+        CouchdDB server provided by ``client``. Client's connection will be
+        used for all CouchDB access.
 
-        Optional arguments,
+        Optional arguments :
 
         ``debug``, 
             for enhanced logging
@@ -260,7 +258,7 @@ class Database( object ) :
 
     def __iter__( self ) :
         """Iterate over all document IDs in this database. For every
-        iteration, `_id` value will be yielded"""
+        iteration, `_id` value will be yielded."""
         d = self.docs()
         return iter( map( lambda x : x['id'], d['rows'] ))
 
@@ -276,7 +274,7 @@ class Database( object ) :
         """
         return Document( self, key )
 
-    def __len__(self ) :
+    def __len__( self ) :
         """Return number of documents in the database."""
         d = self.docs()
         return d['total_rows']
@@ -289,7 +287,8 @@ class Database( object ) :
     def __delitem__(self, docid) :
         """Remove the document specified by ``docid`` from database"""
         s, h, d = Document.head( self, docid )
-        self.deletedoc( docid, rev=h['Etag'] )
+        etag = h['Etag'][1:-1]      # Strip the leading and trailing quotes
+        self.deletedoc( docid, rev=etag )
 
     def __eq__( self, other ) :
         if not isinstance( other, Database ) : return False
@@ -362,7 +361,7 @@ class Database( object ) :
         * Removes old revisions of documents from the database, up to the
         per-database limit specified by the _revs_limit database
         parameter.
-
+         
         Alternatively, you can specify the ``designdoc`` key-word argument to
         compact the view indexes associated with the specified design
         document. You can use this in place of the full database compaction if

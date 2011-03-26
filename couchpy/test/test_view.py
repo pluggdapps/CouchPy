@@ -6,52 +6,32 @@ import logging
 
 sys.path.insert( 0, '..' )
 
-from   client     import Client
-from   database   import Database
-from   httperror   import *
+from   couchpy.client       import Client
+from   couchpy.database     import Database
+from   couchpy.query        import Query
+from   httperror            import *
 
 log = configlog( __name__ )
 
-def test_get_database() :
-    log.info( "Testing Get database ..." )
+def test_query() :
+    log.info( "Testing query ..." )
 
-    c = Client( url='http://localhost:5984/' )
-    [ c.delete(db.name) for db in c ]
+    q = Query(params={ 'startkey' : '10', 'limit' : 2 })
+    assert q.query() in [ '?limit=2&startkey=10', '?startkey=10&limit=2' ]
+    q = Query( startkey='10', limit=2 )
+    assert q.query() in [ '?limit=2&startkey=10', '?startkey=10&limit=2' ]
 
-    c.create('testdb1')
-    db = c['testdb1']
-    d = db()
-    stats = [ "compact_running", "committed_update_seq", "disk_format_version",
-              "disk_size", "doc_count", "doc_del_count", "db_name",
-              "instance_start_time", "purge_seq", "update_seq", ]
-    assert sorted(d.keys()) == sorted(stats)
+    q['startkey'] = '20'
+    q.update({ 'endkey' : '40' })
+    assert sorted(q.query()[1:].split('&')) == [
+                'endkey=40', 'limit=2', 'startkey=20'
+           ]
+    assert q['startkey'] == '20'
 
-    db = Database( 'http://localhost:5984/', 'invalid' )
-    d = db() 
-    assert d == {}
-
-    [ c.delete(db.name) for db in c ]
-    
-def test_put_database() :
-    log.info( "Testing Put database ..." )
-
-    c = Client( url='http://localhost:5984/' )
-    [ c.delete(db.name) for db in c ]
-
-    db = c.create('testdb1')
-    assert isinstance( db, Database )
-
-    assert c.create('testdb1') == None
-    try :
-        c.create('Testdb1') == None
-    except InvalidDBname:
-        pass
-    else :
-        assert False
-
-    [ c.delete(db.name) for db in c ]
-
+    q = q( endkey='50' )
+    assert sorted(q.query()[1:].split('&')) == [
+                'endkey=50', 'limit=2', 'startkey=20'
+           ]
 
 if __name__ == '__main__' :
-    test_get_database()
-    test_put_database()
+    test_query()

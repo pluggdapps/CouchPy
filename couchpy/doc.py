@@ -39,13 +39,13 @@ u'1-1eb6f37b091a143c69ed0332de74df0b'
 Manage document attachments,
 
 >>> a = doc.addattach( '/home/user/recipe.txt' )  # Attach file to document
->>> doc.delattach( a )                            # Delete attachment
 >>> doc.attachs()                                 # Get a list of Attachment objects
 >>> a = doc.attach( 'recipe.txt' )
->>> a.filename                      # Attachment filename 
+>>> a.filename                                    # Attachment filename 
 receipe.txt
 >>> a.data()
 ( ... file content ..., text/plain )
+>>> doc.delattach( a )                            # Delete attachment
 
 Delete document,
 
@@ -580,10 +580,10 @@ class LocalDocument( Document ) :
         self.paths = db.paths + [ '_local',  id_ ]
 
         s, h, doc = _readdoc( self.conn, self.paths, hthdrs=hthdrs, **query
-                    ) if fetch == True else (None, None, doc )
+                    ) if fetch == True else (None, None, doc)
         self.doc = doc
-        self.revs = None        # Cached object
-        self.revs_info = None   # Cached object
+        self.revs = None            # Cached object
+        self.revs_info = None       # Cached object
         self.client = db.client
         self.debug = db.debug
         self.hthdrs = hthdrs
@@ -619,7 +619,7 @@ class LocalDocument( Document ) :
         Refer to, :func:`Document.delete`
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        id_ = id_[7:] if id_.startswith( '_local/' ) else id_
+        id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
         q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
@@ -635,15 +635,14 @@ class LocalDocument( Document ) :
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         dest = toid if asrev == None else "_local/%s?rev=%s" % (toid, asrev)
         hthdrs = { 'Destination' : dest }
-        id_ = id_[7:] if id_.startswith( '_local/' ) else id_
+        id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
-            id_ = d['id']
-            id_ = id_[7:] if id_.startswith( '_local/' ) else id_
+            id_ = self.id2name(d['id'])
             return LocalDocument( db, id_, hthdrs=hthdrs )
         else :
             return None
 
     def id2name( self, id_ ) :
-        return id_[6:] if id_.startswith( '_local' ) else id_
+        return id_[7:] if id_.startswith( '_local/' ) else id_

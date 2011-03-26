@@ -150,6 +150,7 @@ class ReSTful(object) :
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
         log.debug( "%10s %s" % (method, url) )
+        print method, url
         return self.htsession.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
