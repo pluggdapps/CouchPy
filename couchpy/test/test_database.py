@@ -4,8 +4,6 @@ import sys
 import pprint
 import logging
 
-sys.path.insert( 0, '..' )
-
 from   couchpy.client       import Client
 from   couchpy.database     import Database
 from   couchpy.doc          import Document
@@ -91,8 +89,6 @@ def test_changes_database() :
 
     c = Client( url='http://localhost:5984/' )
     [ c.delete(db.dbname) for db in c ]
-
-    # Changes list
 
     [ c.delete(db.dbname) for db in c ]
     

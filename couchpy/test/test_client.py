@@ -11,8 +11,6 @@ from   random   import choice
 #   1. Config PUT and DELETE
 #   2. Test cases for replication
 
-sys.path.insert( 0, '..' )
-
 from couchpy.client     import Client
 from couchpy.database   import Database
 from couchpy.httperror  import configlog

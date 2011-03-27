@@ -5,8 +5,6 @@ import pprint
 import logging
 from   os.path      import join, abspath, basename, splitext
 
-sys.path.insert( 0, '..' )
-
 import couchpy
 from   couchpy.client    import Client
 from   couchpy.database  import Database

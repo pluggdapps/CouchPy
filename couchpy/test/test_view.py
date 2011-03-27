@@ -4,8 +4,6 @@ import sys
 import pprint
 import logging
 
-sys.path.insert( 0, '..' )
-
 from   couchpy.client       import Client
 from   couchpy.database     import Database
 from   couchpy.query        import Query

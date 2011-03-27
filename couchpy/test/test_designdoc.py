@@ -4,8 +4,6 @@ import sys
 import pprint
 import logging
 
-sys.path.insert( 0, '..' )
-
 from   client     import Client
 from   database   import Database
 from   httperror   import *
