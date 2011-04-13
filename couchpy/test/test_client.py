@@ -136,7 +136,7 @@ def test_config() :
     [ c.delete(db.dbname) for db in c ]
 
     sections = c.config()
-    assert len(sections) == 14
+    assert len(sections) > 10
 
     for secname, section in sections.items() :
         assert section == c.config(secname)

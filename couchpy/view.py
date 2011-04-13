@@ -21,9 +21,7 @@ def _viewsgn( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     Note that `q` object should provide .items() method with will return a
     list of key,value query parameters.
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    hthdrs.update( hdr_ctypejs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if keys == None :
         s, h, d = conn.get( paths, hthdrs, None, _query=q.items() )
     else :
@@ -35,7 +33,7 @@ def _viewsgn( conn, keys=None, paths=[], hthdrs={}, q={} ) :
         return (None, None, None)
 
 class View( object ) :
-    def __init__( self, db, designdoc, viewname, _q={}, **query ) :
+    def __init__( self, db, designdoc, viewname, hthdrs={}, _q={}, **query ) :
         """Instantiate a view from database base `db` under `designdoc`.
         `viewname` should be the name of the view as defined by the designdoc.
         Optionally pass the `_q` Query object (or dictionary of query params)
@@ -49,6 +47,7 @@ class View( object ) :
         self.paths = designdoc.paths + [ '_view', viewname ]
         q = _q if isinstance(_q, Query) else Query( params=_q )
         q.update( query )
+        self.hthdrs = self.conn.mixinhdrs( db.hthdrs, hthdrs )
 
     def __call__( self, keys=None, hthdrs={}, _q=None, **query ) :
         """Execute the view using default query or using query object `_q` and
@@ -62,5 +61,6 @@ class View( object ) :
         q = self.q if _q == None else _q
         q.update( query )
         conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _viewsgn( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
         return d

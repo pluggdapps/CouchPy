@@ -9,6 +9,7 @@ from   couchpy.attachment import Attachment
 #   1. List, Update and Rewirte APIs are still being defined.
 #   2. HEAD method is not supported for design-documents ??? If available, can
 #   be used for caching
+#   3. Are attachments supported in design document ???
 
 """ Design document structure,
 {
@@ -45,8 +46,7 @@ def _readsgn( conn, paths=[], hthdrs={}, **query ) :
     query,
         rev=<_rev>, revs=<'true'>, revs_info=<'true'>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     if s == OK :
         return s, h, d
@@ -60,9 +60,7 @@ def _updatesgn( conn, doc, paths=[], hthdrs={} ) :
         err = '`_id` to be supplied while updating the design doc'
         raise CouchPyError( err )
     body = rest.data2json( doc )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    hthdrs.update( hdr_ctypejs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body )
     if s == OK and d['ok'] == True :
         return s, h, d
@@ -77,8 +75,7 @@ def _deletesgn( conn, paths=[], hthdrs={}, **query ) :
     """
     if 'rev' not in query :
         raise CouchPyError( '`rev` to be supplied while deleteing the doc' )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.delete( paths, hthdrs, None, _query=query.items() )
     if s == OK and d['ok'] == True :
         return s, h, d
@@ -100,8 +97,7 @@ def _copysgn( conn, paths=[], hthdrs={}, **query ) :
 
 def _infosgn( conn, paths=[], hthdrs={} ) :
     """GET /<db>/_design/<design-doc>/_info"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.delete( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -117,9 +113,7 @@ def _showsgn( conn, paths=[], doc=None, hthdrs={}, **query ) :
     query for GET,
         details=<string>   format=<string>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    hthdrs.update( hdr_ctypejs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if doc == None :
         s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     else :
@@ -134,26 +128,23 @@ def _showsgn( conn, paths=[], doc=None, hthdrs={}, **query ) :
 class DesignDocument( object ) :
 
     def __init__( self, db, doc, fetch=True, hthdrs={}, **query ) :
-        """Read the design-document specified by `doc` which can be either a
-        dictionary containing `_id` key or a string to be interpreted as
-        design-document `_id`. If key-word argument `fetch` is passed as False,
-        then the document will not be fetched from the database. Optionally
-        accepts HTTP headers `hthdrs`.
+        """Read the design-document specified by ``doc`` which can be either a
+        dictionary containing ``_id`` key or a string to be interpreted as
+        design-document ``_id``. If key-word argument ``fetch`` is passed as
+        `False`, then the document will not be fetched from the database.
+        Optionally accepts HTTP headers ``hthdrs``.
 
-        query parameters,
+        Optional query parameters :
 
-        rev,
+        ``rev``,
             Specify the revision to return
-        revs,
+        ``revs``,
             Return a list of the revisions for design-document
-        revs_info,
+        ``revs_info``,
             Return a list of detailed revision information for the
             design-document
 
-        Return,
-            DesignDocument object
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         # TODO : url-encode _id ???
         self.db = db
@@ -170,38 +161,37 @@ class DesignDocument( object ) :
         self.revs_info = None   # Cached object
         self.client = db.client
         self.debug = db.debug
+        self.hthdrs = self.conn.mixinhdrs( self.db.hthdrs, hthdrs )
 
     def __getitem__(self, key) :
-        """Read JSON converted design-document object like a dictionary"""
+        """Fetch a value corresponding to the ``key`` stored in this
+        design-document. This method does not trigger a database access,
+        instead it uses the cached representation of the document. To refresh
+        the document from database, do, `doc()`
+        """
         return self.doc.get( key, None )
 
     def __setitem__(self, key, value) :
-        """Update JSON converted design-document object like a dictionary.
-        Updating the document object using this interface will automatically
-        PUT the document into the database. However, the following keys cannot
-        be updated,
-            `_id`, `_rev`
-        To refresh the DesignDocument object, so that it reflects the
-        database document, call the DesignDocument object, `doc()`
+        """Update the ``key`` value with ``value``. Updating the document
+        object using this interface will automatically PUT the document into
+        the database. However, the following keys cannot be updated, ``_id``,
+        ``_rev``. To refresh the document from database, do, `doc()`
         
-        Return,
-            None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
         self.doc.update({ key : value })
-        s, h, d = _updatesgn( self.conn, self.doc, self.paths )
+        s, h, d = _updatesgn( self.conn, self.doc, self.paths,
+                              hthdrs=self.hthdrs )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         self.revs = None            # Enforce a fetch
         self.revs_info = None       # Enforce a fetch
         return None
 
     def __delitem__( self, key ) :
-        """Python way of deleting the item, you can also use, delitem()
-        method
-        """
+        """Delete key, value pair identified by ``key``. Python shortcut for
+        :func:`DesignDocument.delitem`"""
         return self.delitem( key )
 
     def __iter__(self):
@@ -209,35 +199,36 @@ class DesignDocument( object ) :
         return iter( self.doc.items() )
 
     def __call__( self, hthdrs={}, **query ) :
-        """
-        If no argument is speficied refresh the design-document from database.
-        Optionally accepts HTTP headers `hthdrs`.
+        """If no argument is speficied, refresh the design-document from
+        database. Optionally accepts HTTP headers `hthdrs`.
 
-        query parameters,
-        rev,
-            If specified, and not the same as this DesignDocument
-            object's revision, create a fresh DesignDocument object with the
-            document of specified revision read from database.
-        revs,
+        Optional arguments:
+
+        ``rev``,
+            If specified, and not the same as this DesignDocument object's
+            revision, create a fresh :class:`DesignDocument` object
+            corresponding to the specified revision. Fetch the same from
+            database.
+        ``revs``,
             If True, return JSON converted object containing a list of
-            revisions for the design-document. Structure of the returned object is
-            defined by CouchDB
-        revs_info,
+            revisions for this document. Structure of the returned object is
+            defined by CouchDB. Refer to ``GET /<db>/_design/<designdoc>`` in 
+            CouchDB API manual.
+        ``revs_info``,
             If True, return JSON converted object containing extended
-            information about all revisions of the design-document. Structure
-            of the returned object is defined by CouchDB.
-        Note that, `revs` and `revs_info` object are cached using Etag header
+            information about all revisions of the document. Structure of the
+            returned object is defined by CouchDB.
+
+        Note that, ``revs`` and ``revs_info`` object are cached using Etag header
         value.
 
-        Return,
-            Based on query parameters
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         rev = query.get( 'rev', None )
         revs = query.get( 'revs', None )
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
 
         if rev != None and rev != self.doc['_rev'] :
             return self.__class__( self.db, self.doc, hthdrs=hthdrs, rev=rev )
@@ -256,57 +247,56 @@ class DesignDocument( object ) :
             self.doc = d
             return self
 
+    def __repr__( self ) :
+        _id = self.doc.get('_id', None)
+        _rev = self.doc.get('_rev', None)
+        return '<%s %r:%r>' % (type(self).__name__, _id, _rev)
+
     def items( self ) :
-        """Dictionary method to provide a list of (key,value) tuple"""
+        """Return a list of (key,value) pairs in this design-document"""
         return self.doc.items()
+
+    def keys( self ) :
+        """Return a list of document keys"""
+        return self.doc.keys()
 
     def all( self ) :
         """Shortcut for,
-            designdoc( revs=True )
 
-        Returns,
-            JSON converted object containing a list of revisions for the
-            design-document.
-        Admin-prev,
-            No
+        >>> doc( revs=True )
+
+        Returns JSON converted object containing a list of revisions for the
+        design-document.
+
+        Admin-prev, No
         """
         return self( revs=True )
 
     def update( self, using={}, hthdrs={} ) :
-        """Update JSON converted design-document object with a dictionary.
+        """Update design-document ``using`` a dictionary.
         Updating the document using this interface will automatically PUT the
-        document into the database. However, the following keys cannot be
-        updated,
-            `_id`, `_rev`
-        Optionally accepts HTTP headers `hthdrs`. Calling it with empty
-        argument will simply put the existing document content into the
-        database.
-        To refresh the DesignDocument object, so that it reflects the database
-        document, call the DesignDocument object, `doc()`
+        design-document into the database. However, the following keys cannot be
+        updated, ``_id``, ``_rev``. Optionally accepts HTTP headers `hthdrs`.
+        Calling it with empty argument will simply put the existing document
+        content into the database. To refresh the document object, do,
+        `doc()`.
 
-        Return,
-            None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
         self.doc.update( using )
         conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatesgn( conn, self.doc, paths, hthdrs=hthdrs, **query )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         return None
 
     def delitem( self, key ) :
-        """Remove the specified key from design-document. However, the
-        following keys cannot be removed,
-            `_id`, `_rev`
-        To refresh the DesignDocument object, so that it reflects the database
-        document, call the DesignDocument object, `doc()`
-        
-        Return,
-            Value of the deleted key
-        Admin-prev,
-            No
+        """Remove the specified key from design-document. However, the 
+        following keys cannot be removed, ``_id``, ``_rev``.  To refresh 
+        the DesignDocument object, do, `doc()`. Return the value of deleted key.
+
+        Admin-prev, No
         """
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
@@ -317,30 +307,28 @@ class DesignDocument( object ) :
 
     def copyto( self, toid, asrev=None ) :
         """Copy this revision of design-document to a destination specified by
-        `toid` and optional revision `asrev`. The source document revision
-        will be same as this DesignDocument object.
+        ``toid`` and optional revision ``asrev``. The source document revision
+        will be same as this ``DesignDocument`` object. On success, return
+        copied design-document object, else None.
 
-        Return,
-            On success, copied DesignDocument object, else None
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         return self.__class__.copy( self.db, self, toid, asrev=asrev,
                                     rev=self._rev )
 
     def addattach( self, filepath, content_type=None, hthdrs={}, **query ) :
-        """Add file `filepath` as attachment to this design-document.
-        HTTP headers 'Content-Type' and 'Content-Length' will also be
-        remembered in the database. Optinally, content_type can be provided
-        as key-word argument.
+        """Add file specified by ``filepath`` as attachment to this
+        design-document. HTTP headers 'Content-Type' and 'Content-Length' will
+        also be remembered in the database. Optionally, ``content_type`` can
+        be provided as key-word argument.
         
-        Return,
-            Attachment object
-        Admin-prev,
-            No
+        Return :class:`couchpy.attachment.Attachment` object.
+
+        Admin-prev, No
         """
         data = open( filepath ).read()
         filename = basename( filepath )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.putattachment(
                 self.db, self, filepath, data, content_type=content_type,
                 hthdrs=hthdrs, **query
@@ -349,11 +337,16 @@ class DesignDocument( object ) :
         return Attachment( self, filename )
 
     def delattach( self, attach, hthdrs={}, **query ) :
-        """Delete the attachment either specified as filename or Attachment
-        object from this design-document
+        """Delete the attachment specified either as filename or Attachment
+        object, from this design-document.
+
+        >>> doc.delattach( 'default.css' )
+        >>> attach = doc.attach( 'default.css' )
+        >>> doc.delattach( attach )
         """
         filename = attach.filename \
                    if isinstance(attach, Attachment) else attach
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.delattachment(
                 self.db, self, filename, hthdrs=hthdrs, **query
             )
@@ -361,14 +354,16 @@ class DesignDocument( object ) :
         return None
 
     def attach( self, filename ) :
-        """Return Attachment object for filename in this design-document"""
+        """Return :class:`couchpy.attachment.Attachment` object for
+        ``filename`` attachment stored under this design-document.
+        """
         a_ = self.doc.get( '_attachment', {} ).get( filename, None )
         a = Attachment( self, filename ) if a_ else None
         return a
 
     def attachs( self ) :
-        """Return a list of all Attachment object for attachment in this
-        design-document
+        """Return a list of all attachments in this design-document as 
+        :class:`couchpy.attachment.Attachment` objects.
         """
         a = [ Attachment(self, f) for f in self.doc.get('_attachments', {}) ]
         return a
@@ -376,23 +371,19 @@ class DesignDocument( object ) :
     def info( self, hthdrs={} ) :
         """Obtains information about a given design document, including the
         index, index size and current status of the design document and
-        associated index information.
+        associated index information. Returns, JSON converted object as returned
+        by CouchdB. Refer to ``GET /<db>/_design/<designdoc>/_info`` in CouchDB
+        API manual.
 
-        Returns,
-            JSON converted object as returned by CouchdB.
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _infosgn( conn, paths, hthdrs=hthdrs )
         return d
 
     def views( self ) :
-        """Return a list of view names from this design document.
-
-        Return,
-            List of view names
-        """
+        """Return a list of view names from this design-document."""
         self()
         return self.views.keys()
 
@@ -406,21 +397,20 @@ class DesignDocument( object ) :
 
     @classmethod
     def create( cls, db, doc, hthdrs={} ) :
-        """Create a new design-document in the specified database, using the
-        supplied JSON document structure. If the JSON structure includes the _id
-        field, then the document will be created with the specified document
-        ID. If the _id field is not specified, a new unique ID will be
-        generated.
+        """Create a new design-document ``doc`` in the specified database
+        ``db``. ``db`` must be :class:`couchpy.database.Database` object.
+        ``doc`` will be converted to JSON structure before inserting it into
+        the database. If ``doc`` has a key by name the ``_id``, then the 
+        design-document will be created with that ID, else, a new unique ID
+        will be generated. Return :class:`DesignDocument` object
 
-        Return,
-            DesignDocument object
-        Admin-prev,
-            No
+        Admin-prev, No
         """
         id_ = self.id2name(doc['_id'])
         if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_design', id_ ]
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _updatesgn( db.conn, doc, paths, hthdrs )
         if d == None : return None
         doc.update({ '_id' : d['id'], '_rev' : d['rev'] })
@@ -428,42 +418,44 @@ class DesignDocument( object ) :
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
-        """Delete a design-document in the specified database. `doc` can be
-        document-id or it can be DesignDocument object, in which case the object
-        is not valid after deletion.
+        """Delete design-document ``doc`` from the specified database ``db``.
+        ``db`` must be :class:`couchpy.database.Database` object.
+        `doc` can be design-document or it can be :class:`DesignDocument`
+        object, in which case the object is not valid after deletion.
 
-        query parameters,
-        rev,
-            the current revision of the document.
+        Optional arguments:
 
-        Return,
-            JSON converted object as returned by CouchDB
-        Admin-prev,
-            No
+        ``rev``,
+            the current revision of the design-document, if not specified,
+            ``doc`` must be a `DesignDocument` object whose ``_rev`` key will
+            be used.
+
+        Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = self.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletesgn( db.conn, paths, hthdrs, **query )
         return d
 
     @classmethod
     def copy( cls, db, doc, toid, asrev=None, hthdrs={}, **query ) :
         """Copy a source design-document to a destination, specified by
-        `toid` and optional revision `asrev`. If the source document's
+        ``toid`` and optional revision ``asrev``. If the source document's
         revision `rev` is not provided as key-word argument, then the latest
         revision of the document will be used.
 
-        Return,
-            On success, destination's DesignDocument object, else None
-        Admin-prev,
-            No
+        On success, return destination's `DesignDocument` object, else None.
+
+        Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = self.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
         hthdrs = { 'Destination' : dest }
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copysgn( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             return DesignDocument( self.db, d['id'], hthdrs=hthdrs, rev=d['rev'] )

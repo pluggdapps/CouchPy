@@ -62,6 +62,7 @@ True
 
 import os, sys
 from   copy             import deepcopy
+from   Cookie           import SimpleCookie
 
 import rest
 from   httpc            import HttpSession, OK
@@ -73,17 +74,18 @@ from   httperror        import *
 #      But the API doc is not clear about it.
 #   3. Move configlog from httperror to __init__.py
 #   4. Logging is just not working.
+#   5. Test cases for addadmin(), deladmin(), admins().
 
 __VERSION__ = '0.1'
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
 log = configlog( __name__ )
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
 
 def _headsrv( conn, paths=[], hthdrs={} ) :
     """HEAD /"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.head( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -92,8 +94,7 @@ def _headsrv( conn, paths=[], hthdrs={} ) :
 
 def _getsrv( conn, paths=[], hthdrs={} ) :
     """GET /"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -102,8 +103,7 @@ def _getsrv( conn, paths=[], hthdrs={} ) :
 
 def _active_tasks( conn, paths=[], hthdrs={} ) :
     """GET /_active_tasks"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -112,8 +112,7 @@ def _active_tasks( conn, paths=[], hthdrs={} ) :
 
 def _all_dbs( conn, paths=[], hthdrs={} ) :
     """GET /_all_dbs"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -122,8 +121,7 @@ def _all_dbs( conn, paths=[], hthdrs={} ) :
 
 def _restart( conn, paths=[], hthdrs={} ) :
     """POST /_restart"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.post( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -132,8 +130,7 @@ def _restart( conn, paths=[], hthdrs={} ) :
 
 def _stats( conn, paths=[], hthdrs={} ) :
     """POST /_stats/"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -145,8 +142,7 @@ def _uuids( conn, paths=[], hthdrs={}, **query ) :
     query object `q`,
         count=<num>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     if s == OK :
         return s, h, d
@@ -155,8 +151,7 @@ def _uuids( conn, paths=[], hthdrs={}, **query ) :
 
 def _replicate( conn, body, paths=[], hthdrs={} ) :
     """POST /_replicate"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = rest.data2json( body )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
@@ -166,8 +161,7 @@ def _replicate( conn, body, paths=[], hthdrs={} ) :
 
 def _log( conn, paths=[], hthdrs={}, **query ) :
     """GET /_log"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     if s == OK :
         return s, h, d
@@ -182,8 +176,7 @@ def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     PUT /_config/<section>/<key>
     DELETE /_config/<section>/<key>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     if 'value' in kwargs :      # PUT
         body = rest.data2json( kwargs['value'] )
         s, h, d = conn.put( paths, hthdrs, body )
@@ -196,7 +189,27 @@ def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     else :
         return (None, None, None)
 
+def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
+    """
+    GET /_session
+    POST /_session
+    DELETE /_session
+    """
+    if logout == True :
+        s, h, d = conn.delete( paths, hthdrs, None )
+    elif login :
+        hthdrs = conn.mixinhdrs( hthdrs, hdr_ctypeform )
+        body = 'name=%s&password=%s' % login
+        s, h, d = conn.post( paths, hthdrs, body )
+    else :
+        s, h, d = conn.get( paths, hthdrs, None )
+    if s == OK :
+        return s, h, d
+    else :
+        return (None, None, None)
+
 class Client( object ) :
+
     def __init__( self, url=DEFAULT_URL, **kwargs) :
         """Initialize a client object, with the base `url` and optional
         key-word arguments.
@@ -206,7 +219,7 @@ class Client( object ) :
 
         ``full_commit``,
             Boolean, turn on the X-Couch-Full-Commit header
-        ``headers``,
+        ``hthdrs``,
             Dictionary of HTTP request headers. The header fields and values
             will be remembered for every request made via this client.
             Aside from these headers, if a method supports `hthdrs` key-word
@@ -215,6 +228,8 @@ class Client( object ) :
             :class:`httpc.HttpSession` instance or None for a default session
         ``debug``, 
             for enhanced logging
+        ``cookie``,
+            `SimpleCookie` cookie object, that can be used to populate headers
         """
         self.url = url
 
@@ -222,15 +237,17 @@ class Client( object ) :
         hthdrs = kwargs.get( 'hthdrs', {} )
         htsession = kwargs.get( 'htsession', HttpSession() )
         debug = kwargs.get( 'debug', False )
+        cookie = kwargs.get( 'cookie', None )
 
         hthdrs = {
             'X-Couch-Full-Commit' :  str(full_commit).lower()
         } if full_commit != None else {}
 
-        h_ = deepcopy( hthdrs )
         self.conn = rest.ReSTful( self.url, htsession, headers=hthdrs )
-        self.hthdrs, self.htsession, self.debug = hthdrs, htsession, debug
+        self.htsession, self.debug = htsession, debug
+        self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
+        cookie != None and self.conn.savecookie( self.hthdrs, cookie )
 
     #---- Pythonification, all the methods are just wrappers around the API
     #---- methods
@@ -256,7 +273,7 @@ class Client( object ) :
     def __nonzero__( self ) :
         """Return whether the server is available."""
         conn, paths = self.conn, self.paths
-        s, _, _ = _headsrv( conn, paths )
+        s, _, _ = _headsrv( conn, paths, hthdrs=self.hthdrs )
         return True if s == OK else False
 
     def __repr__( self ) :
@@ -277,7 +294,7 @@ class Client( object ) :
         return self.database(name)
 
     def __call__( self ) :
-        """Check whether the database is alive and return the welcome string,
+        """Check whether CouchDB instance is alive and return the welcome string,
         which will be something like
 
         >>> c = Client()
@@ -286,7 +303,7 @@ class Client( object ) :
 
         """
         conn, paths = self.conn, self.paths
-        s, h, d = _getsrv( conn, paths )
+        s, h, d = _getsrv( conn, paths, hthdrs=self.hthdrs )
         return d
 
 
@@ -315,6 +332,7 @@ class Client( object ) :
         Admin-Prev, No
         """
         conn, paths = self.conn, (self.paths + [ '_active_tasks' ])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _active_tasks( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -326,6 +344,7 @@ class Client( object ) :
         """
         from   database     import Database
         conn, paths, debug = self.conn, (self.paths + [ '_all_dbs' ]), self.debug
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
         return [ Database( self, n, debug=debug) for n in d ] if d else []
 
@@ -337,6 +356,7 @@ class Client( object ) :
         Admin-Prev, Yes
         """
         conn, paths = self.conn, (self.paths + [ '_restart' ])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _restart( conn, paths, hthdrs=hthdrs )
         return d['ok'] if (s==OK) else False
 
@@ -353,8 +373,8 @@ class Client( object ) :
 
         Admin-Prev, No
         """
-        hthdrs = kwargs.get( 'hthdrs', {} )
         conn, paths = self.conn, (['_stats'] + list(paths))
+        hthdrs = conn.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
         s, h, d = _stats( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -364,7 +384,8 @@ class Client( object ) :
         """
         q =  { 'count' : count } if isinstance(count, (int,long)) else {}
         conn, paths = self.conn, (self.paths + ['_uuids'])
-        s, h, d = _uuids( conn, paths, **q )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _uuids( conn, paths, hthdrs=hthdrs, **q )
         return d['uuids'] if s == OK else None
 
     def utils( self ) :
@@ -394,12 +415,15 @@ class Client( object ) :
             Address of a proxy server through which replication should occur
         """
         conn, paths = self.conn, (self.paths + ['_replicate'])
+        # request body
         body = {'source': source, 'target': target}
         body.update(options)
         data = StringIO()
         json.dump(body, data)
         body = data.getvalue()
-        s, h, d = _replicate( conn, body, paths, hthdrs={} )
+        # request header
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _replicate( conn, body, paths, hthdrs=hthdrs )
         return d
 
     def log( self, bytes=None, offset=None, hthdrs={} ) :
@@ -419,6 +443,7 @@ class Client( object ) :
         q = {}
         isinstance(bytes, (int,long)) and q.setdefault('bytes', bytes)
         isinstance(offset, (int,long)) and q.setdefault('offset', offset)
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
         return d.getvalue() if s == OK else None
 
@@ -449,6 +474,7 @@ class Client( object ) :
         value = kwargs.get( 'value', None )
         delete = kwargs.get( 'delete', None )
         conn, paths = self.conn, (['_config'] + paths)
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         if delete == True :
             s, h, d = _config( conn, paths, hthdrs=hthdrs, delete=delete )
         elif value != None :
@@ -456,6 +482,46 @@ class Client( object ) :
         else :
             s, h, d = _config( conn, paths, hthdrs=hthdrs )
         return d
+
+    def addadmin( self, name, password ) :
+        """Create a server admin by name ``name`` with ``password``."""
+        self.config( section='admins', key=name, value=password )
+
+    def deladmin( self, name ) :
+        """Delete server admin user ``name``"""
+        self.config( section='admins', key=name, delete=True )
+
+    def admins( self ) :
+        """List of admin user"""
+        return self.config( section='admins' )
+
+    def login( self, username, password, hthdrs={} ) :
+        """Login with ``username`` and ``password``, uses session-cookie for
+        authentication, so preserve the following cookie for subsequent
+        request.
+        """
+        conn, paths = self.conn, ['_session']
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
+        sc = SimpleCookie()
+        sc.load( h['set-cookie'] )
+        conn.savecookie( self.hthdrs, sc )
+        return s, h, d if s == OK and d['ok'] else (None, None, None)
+
+    def logout( self, hthdrs={} ) :
+        """Logout from authenticated DB session"""
+        conn, paths = self.conn, ['_session']
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _session( conn, paths, logout=True, hthdrs=hthdrs )
+
+    def authsession( self, hthdrs={} ) :
+        """Fetch the authenticated session information for this client. Note
+        that browser-session is not handled by the client."""
+        conn, paths = self.conn, ['_session']
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _session( conn, paths, hthdrs=hthdrs )
+        return d
+        
 
     #---- Database,
     #---- the actual ReST-ful API call is made by the Database class

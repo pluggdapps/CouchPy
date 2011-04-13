@@ -150,11 +150,32 @@ class ReSTful(object) :
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
         log.debug( "%10s %s" % (method, url) )
-        print method, url
-        return self.htsession.request(
+        resp = self.htsession.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
                )
+        return resp
+
+
+    #---- Helper functions as Classmethods
+
+    @classmethod
+    def savecookie( cls, hthdrs, simplecookie ) :
+        cookies = filter(
+                  None,
+                  [ hthdrs.get( 'Set-Cookie', hthdrs.get( 'set-cookie', '' )) ]
+                )
+        for name, morsel in simplecookie.items() :
+            cookies.append( '%s=%s' %  (name, morsel.value) )
+        hthdrs['Cookie'] = ', '.join(cookies)
+        return hthdrs
+
+    @classmethod
+    def mixinhdrs( cls, *hthdrs ) :
+        newhthdrs = {}
+        [ newhthdrs.update(h) for h in hthdrs ]
+        return newhthdrs
+
 
 def urljoin( base, *path, **kwargs ) :
     """Assemble a uri based on a base, any number of path segments, and

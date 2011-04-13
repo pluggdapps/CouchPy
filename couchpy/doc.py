@@ -106,9 +106,7 @@ def _createdoc( conn, doc, paths=[], hthdrs={}, **query ) :
         batch='ok'
     """
     body = rest.data2json( doc )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    hthdrs.update( hdr_ctypejs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
     if s == CREATED and d['ok'] == True :
         return s, h, d
@@ -122,8 +120,7 @@ def _readdoc( conn, paths=[], hthdrs={}, **query ) :
     query,
         rev=<_rev>, revs=<'true'>, revs_info=<'true'>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     if s == OK :
         return s, h, d
@@ -155,9 +152,7 @@ def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
     if '_local' not in paths and '_rev' not in doc :
         raise CouchPyError( '`_rev` to be supplied while updating the doc' )
     body = rest.data2json( doc )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    hthdrs.update( hdr_ctypejs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body, _query=query.items() )
     if s == CREATED and d['ok'] == True :
         return s, h, d
@@ -173,8 +168,7 @@ def _deletedoc( conn, paths=[], hthdrs={}, **query ) :
     """
     if 'rev' not in query :
         raise CouchPyError( '`rev` to be supplied while deleteing the doc' )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.delete( paths, hthdrs, None, _query=query.items() )
     if s == OK and d['ok'] == True :
         return s, h, d
@@ -232,7 +226,7 @@ class Document( object ) :
         self.revs_info = None   # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = hthdrs
+        self.hthdrs = self.conn.mixinhdrs( self.db.hthdrs, hthdrs )
 
     def __getitem__(self, key) :
         """Fetch a value corresponding to the ``key`` stored in this document.
@@ -253,8 +247,8 @@ class Document( object ) :
         reserved = [ '_id', '_rev' ]
         if key in reserved : return None
         self.doc.update({ key : value })
-        h = deepcopy( self.hthdrs )
-        s, h, d = _updatedoc( self.conn, self.doc, self.paths, hthdrs=h )
+        s, h, d = _updatedoc( self.conn, self.doc, self.paths,
+                              hthdrs=self.hthdrs )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         self.revs = None            # Enforce a fetch
         self.revs_info = None       # Enforce a fetch
@@ -298,8 +292,7 @@ class Document( object ) :
         revs = query.get( 'revs', None )
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
-        h = deepcopy( self.hthdrs )
-        h.update( hthdrs )
+        h = conn.mixinhdrs( self.hthdrs, hthdrs )
 
         if rev != None and rev != self.doc['_rev'] :
             return self.__class__( self.db, self.doc, hthdrs=h, rev=rev )
@@ -369,15 +362,36 @@ class Document( object ) :
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
         self.doc.update( using )
         conn, paths = self.conn, self.paths
-        h = deepcopy( self.hthdrs )
-        h.update( hthdrs )
-        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=h, **query )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
+        self.doc.update({ '_rev' : d['rev'] }) if d else None
+        return None
+
+    def write( self, doc=None, hthdrs={}, **query ) :
+        """Write the next version of the document. `_id` and `_rev` will be
+        gathered from Document object, ``doc`` should be a dictionary object
+        representing the document.
+        Optionally accepts HTTP headers `hthdrs`.  Calling it with empty
+        argument will simply put the existing document content into the
+        database. To refresh the document object, do, `doc()`.
+
+        Admin-prev, No
+        """
+        [ using.pop( k, None ) for k in ['_id', '_rev'] ]
+        d = { 
+            '_id' : doc.get( '_id', self.doc['_id'] ),
+            '_rev' : doc.get( '_rev', self.doc['_rev'] ),
+        }
+        d.update( doc )
+        conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         return None
 
     def delitem( self, key ) :
         """Remove the specified key from document. However, the following keys
-        cannot be removed, ``_id``, ``_rev``. To refresh the document object,
+        cannot be removed, ``_id``, ``_rev``. To refresh the Document object,
         do, `doc()`. Return the value of deleted key.
 
         Admin-prev, No
@@ -412,11 +426,10 @@ class Document( object ) :
         """
         filename = basename( filepath )
         data = open( filepath ).read()
-        h = deepcopy( self.hthdrs )
-        h.update( hthdrs )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.putattachment(
                 self.db, self, filepath, data, content_type=content_type,
-                hthdrs=h, **query
+                hthdrs=hthdrs, **query
             )
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None
         return Attachment( self, filename )
@@ -431,15 +444,17 @@ class Document( object ) :
         """
         filename = attach.filename \
                    if isinstance(attach, Attachment) else attach
-        h = deepcopy( self.hthdrs )
-        h.update( self.hthdrs )
-        d = Attachment.delattachment(self.db, self, filename, hthdrs=h, **query)
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
+        d = Attachment.delattachment(
+                self.db, self, filename, hthdrs=hthdrs, **query
+            )
         self.doc.update({ '_rev' : d['rev'] }) if d != None else None
         return None
 
     def attach( self, filename ) :
         """Return :class:`couchpy.attachment.Attachment` object for
-        ``filename`` attachment stored under this document."""
+        ``filename`` attachment stored under this document.
+        """
         a_ = self.doc.get( '_attachments', {} ).get( filename, None )
         a = Attachment( self, filename ) if a_ else None
         return a
@@ -462,6 +477,7 @@ class Document( object ) :
         """Probe whether the document is available"""
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _headdoc( db.conn, paths, hthdrs=hthdrs, **query )
         return s, h, d
 
@@ -499,6 +515,7 @@ class Document( object ) :
             attachs_ = doc.get('_attachments', {})
             attachs_.update( attachs )
             doc['_attachments'] = attachs_
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         if fetch != True :
@@ -507,7 +524,7 @@ class Document( object ) :
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
-        """Delete a document ``doc`` from the specified database ``db``.
+        """Delete document ``doc`` from the specified database ``db``.
         ``db`` must be :class:`couchpy.database.Database` object.
         `doc` can be document-id or it can be :class:`Document` object,
         in which case the object is not valid after deletion.
@@ -523,6 +540,7 @@ class Document( object ) :
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
         q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
@@ -541,6 +559,7 @@ class Document( object ) :
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev)
         hthdrs = { 'Destination' : dest }
         paths = db.paths + [ id_ ]
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             return Document( db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
@@ -586,7 +605,7 @@ class LocalDocument( Document ) :
         self.revs_info = None       # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = hthdrs
+        self.hthdrs = self.conn.mixinhdrs( client.hthdrs, db.hthdrs, hthdrs )
 
     @classmethod
     def create( cls, db, doc, attachfiles=[], hthdrs={}, fetch=True, **query ) :
@@ -605,6 +624,7 @@ class LocalDocument( Document ) :
             attachs_ = doc.get('_attachments', {})
             attachs_.update( attachs )
             doc['_attachments'] = attachs_
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         if fetch != True :
@@ -622,6 +642,7 @@ class LocalDocument( Document ) :
         id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
         q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
@@ -637,6 +658,7 @@ class LocalDocument( Document ) :
         hthdrs = { 'Destination' : dest }
         id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             id_ = self.id2name(d['id'])

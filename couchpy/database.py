@@ -9,7 +9,6 @@ Create a client object,
 >>> db = c.create('dbname_first') # Create
 """
 import sys, re
-from   copy         import deepcopy
 
 import couchpy.rest       as rest
 from   couchpy.httperror  import *
@@ -30,11 +29,11 @@ from   couchpy.query      import Query
 #   6. Should we provide attachment facilities for local docs ?
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_ctypejs = { 'Content-Type' : 'application/json' }
 
 def _db( conn, paths=[], hthdrs={} ) :
     """GET /<db>"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
@@ -43,8 +42,7 @@ def _db( conn, paths=[], hthdrs={} ) :
 
 def _createdb( conn, paths=[], hthdrs={} ) :
     """PUT /<db>"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.put( paths, hthdrs, None )
     if s == CREATED and d['ok'] == True :
         return s, h, d
@@ -53,8 +51,7 @@ def _createdb( conn, paths=[], hthdrs={} ) :
 
 def _deletedb( conn, paths=[], hthdrs={} ) :
     """DELETE /<db>"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.delete( paths, hthdrs, None )
     if s == OK and d['ok'] == True :
         return s, h, d
@@ -69,8 +66,7 @@ def _changes( conn, paths=[], hthdrs={}, **query ) :
         include_docs=<bool>                 limit=<number>
         since=<seq-num>                     timeout=<millisecond>
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
     if s == OK :
         return s, h, d
@@ -80,8 +76,7 @@ def _changes( conn, paths=[], hthdrs={}, **query ) :
 def _compact( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_compact;
        POST /<db>/_compact>/<designdoc>"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.post( paths, hthdrs, None )
     if s == OK and d["ok"] == True :
         return s, h, d
@@ -90,8 +85,7 @@ def _compact( conn, paths=[], hthdrs={} ) :
 
 def _view_cleanup( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_view_cleanup"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.post( paths, hthdrs, None )
     if s == OK and d["ok"] == True :
         return s, h, d
@@ -100,8 +94,7 @@ def _view_cleanup( conn, paths=[], hthdrs={} ) :
 
 def _ensure_full_commit( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_ensure_full_commit"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.post( paths, hthdrs, None )
     if s == OK and d["ok"] == True :
         return s, h, d
@@ -115,8 +108,7 @@ def _bulk_docs( conn, docs, atomic=False, paths=[], hthdrs={} ) :
         'docs' : docs,
     }
     body = rest.data2json( docs )
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
         return s, h, d
@@ -128,8 +120,7 @@ def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
     query,
         Same query parameters as that of design-doc views
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = rest.data2json( designdoc )
     s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
     if s == OK :
@@ -139,8 +130,7 @@ def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
 
 def _purge( conn, body, paths=[], hthdrs={} ) :
     """POST /<db>/_purge"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = rest.data2json( body )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
@@ -161,8 +151,7 @@ def _all_docs( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     Note that `q` object should provide .items() method with will return a
     list of key,value query parameters.
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     if keys == None :
         s, h, d = conn.get( paths, hthdrs, None, _query=q.items() )
     else :
@@ -175,8 +164,7 @@ def _all_docs( conn, keys=None, paths=[], hthdrs={}, q={} ) :
 
 def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
     """TODO : To be implemented"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = rest.data2json( revs )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
@@ -186,8 +174,7 @@ def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
 
 def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
     """TODO : To be implemented"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = rest.data2json( revs )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
@@ -196,12 +183,16 @@ def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
         return (None, None, None)
 
 def _security( conn, paths=[], security=None, hthdrs={} ) :
-    """TODO : To be implemented"""
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
-    body = rest.data2json( security ) if security else None
-    s, h, d = conn.put( paths, hthdrs, body
-              ) if security != None else conn.get( paths, hthdrs, body )
+    """
+    GET /<db>/_security
+    PUT /<db>/_security
+    """
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    if security == None :
+        s, h, d = conn.get( paths, hthdrs, None )
+    else :
+        body = rest.data2json( security )
+        s, h, d = conn.put( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
@@ -212,8 +203,7 @@ def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
     GET /<db>/_revs_limit       if limit is None
     PUT /<db>/_revs_limit       if limit is an integer value
     """
-    hthdrs = deepcopy( hthdrs )
-    hthdrs.update( hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = '%s' % limit if limit != None else None
     if limit == None :
         s, h, d = conn.get( paths, hthdrs, body )
@@ -228,7 +218,7 @@ def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
 
 class Database( object ) :
 
-    def __init__( self, client, dbname, **kwargs ) :
+    def __init__( self, client, dbname, hthdrs={}, **kwargs ) :
         """Instantiate the database object corresponding to ``dbname`` in
         CouchdDB server provided by ``client``. Client's connection will be
         used for all CouchDB access.
@@ -237,6 +227,11 @@ class Database( object ) :
 
         ``debug``, 
             for enhanced logging
+        ``hthdrs``,
+            Dictionary of HTTP request headers. The header fields and values
+            will be remembered for every request made via this ``database``
+            object. Aside from these headers, if a method supports `hthdrs`
+            key-word argument, it will be used for a single request.
         """
         self.client = client
         self.dbname = Database.validate_dbname( dbname )
@@ -245,6 +240,7 @@ class Database( object ) :
         self.conn = client.conn
         self.paths = client.paths + [ dbname ]
         self.info = {}
+        self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
 
     def __call__( self ) :
         """Return information about this database, refer to ``GET /db`` API
@@ -252,7 +248,7 @@ class Database( object ) :
 
         Admin-Prev, No
         """
-        s, h, d = _db( self.conn, self.paths )
+        s, h, d = _db( self.conn, self.paths, hthdrs=self.hthdrs )
         self.info = d
         return d
 
@@ -311,8 +307,7 @@ class Database( object ) :
     def ispresent( self ) :
         """Return a boolean, on database availability in the server."""
         try :
-            self()
-            return True
+            return bool( self() )
         except :
             return False
 
@@ -346,6 +341,7 @@ class Database( object ) :
             No
         """
         conn, paths = self.conn, ( self.paths + ['_changes'] )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _changes( conn, paths, hthdrs=hthdrs, **query )
         return d
 
@@ -378,6 +374,7 @@ class Database( object ) :
                       ) if designdoc == None else ( 
                         self.conn, (self.paths + ['_compact',designdoc])
                       )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _compact( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -387,6 +384,7 @@ class Database( object ) :
         Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_view_cleanup'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _view_cleanup( conn, paths, hthdrs=hthdrs )
         return None
 
@@ -398,6 +396,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_ensure_full_commit'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _ensure_full_commit( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -420,6 +419,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths, h = self.conn, (self.paths + ['_bulk_docs']), hthdrs
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths=paths, hthdrs=h )
         return d
 
@@ -434,6 +434,7 @@ class Database( object ) :
         Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_temp_view'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
         return d
 
@@ -469,6 +470,7 @@ class Database( object ) :
             _id = doc._id if isinstance(doc, Document) else doc
             revs = [ doc._rev ] if revs == None else revs
             body = { _id : revs }
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
@@ -524,10 +526,11 @@ class Database( object ) :
 
         Admin-prev, No
         """
-        conn, paths, h = self.conn, (self.paths + ['_all_docs']), hthdrs
+        conn, paths = self.conn, (self.paths + ['_all_docs'])
         q = dict( _q.items() )
         q.update( query )
-        s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=h, q=q )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
         return d
 
     def missingrevs( self ) :
@@ -536,19 +539,37 @@ class Database( object ) :
     def revsdiff( self ) :
         """TBD : To be implemented"""
 
-    def security( self, obj=None, hthdrs={} ) :
-        """TBD : To be implemented"""
+    def security( self, security=None, hthdrs={} ) :
+        """Get or Set the current secrity object for this database. The
+        security object consists of two compulsory elements, 
+            `admins` and `readers`,
+        which are used to specify the list of users and/or roles that
+        have `admin` and `reader` rights to the database respectively. Any
+        additional fields in the security object are optional. The entire
+        security object is made available to validation and other internal
+        functions, so that the database can control and limit functionality.
+
+        To set current security object, pass them as key-word argument,
+        ``security``,
+            Security object contains admins and readers
+        Return the current security object
+        """
+        conn, paths = self.conn, (self.paths + ['_security'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _security( conn, paths, security=security, hthdrs=hthdrs )
+        return d
 
     def revslimit( self, limit=None, hthdrs={} ) :
         """Get or Set the current revs_limit (revision limit) for database.
         To set revs_limit, pass the value as key-word argument ``limit``
         """
         conn, paths = self.conn, (self.paths + ['_revs_limit'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
 
     def createdoc( self, docs=None, localdocs=None, designdocs=None,
-                   filepaths=[], hthdrs={}, **query ) :
+                   filepaths=[], doc_cls=None, hthdrs={}, **query ) :
         """Create one or more document in this database. Documents can be of
         Normal documents, Local documents Design document.
 
@@ -566,9 +587,12 @@ class Database( object ) :
 
         Admin-prev, No
         """
-        h, q, f = hthdrs, query, filepaths
+        conn, q, f = self.conn, query, filepaths
+        h = conn.mixinhdrs( self.hthdrs, hthdrs )
         r = None
-        if docs != None and isinstance( docs, (list, tuple) ) :
+        if docs != None and doc_cls != None :
+            r = [ doc_cls.create(self, doc, hthdrs=h, **q) for doc in docs ]
+        elif docs != None and isinstance( docs, (list, tuple) ) :
             r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
         elif docs != None :
             r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
@@ -597,7 +621,7 @@ class Database( object ) :
 
         Admin-Prev, No
         """
-        h = hthdrs
+        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         if docs != None and isinstance(docs, (list, tuple)) :
             [Document.delete(self, doc, hthdrs=h, rev=rev) for doc,rev in docs]
         elif docs != None :
@@ -624,6 +648,7 @@ class Database( object ) :
         """
         q = Query( startkey="_design/", endkey="_design0" )
         q.update( **query )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
         return map( lambda x : x['id'], d['rows'] )
 
@@ -636,7 +661,7 @@ class Database( object ) :
 
         Admin-prev, No
         """
-        h = hthdrs
+        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         if docid.startswith( '_local' ) :
             d = LocalDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
                                     rev=rev )
@@ -684,6 +709,7 @@ class Database( object ) :
             No
         """
         conn, paths = client.conn, (client.paths + [ dbname ])
+        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
         s, h, d = _createdb( conn, paths, hthdrs=hthdrs )
         if d != None :
             return Database( client, dbname, hthdrs=hthdrs )
@@ -701,6 +727,7 @@ class Database( object ) :
             No
         """
         conn, paths = client.conn, (client.paths + [dbname])
+        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
         s, h, d = _deletedb( conn, paths, hthdrs=hthdrs )
         return d
 

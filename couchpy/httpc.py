@@ -11,12 +11,7 @@ standard library.
 # TODO :
 #   1. Document this module
 
-import sys
-import socket
-import time
-import errno
-import urllib
-import json
+import sys, socket, time, errno, urllib, json
 from   urlparse  import urlsplit, urlunsplit
 from   base64    import b64encode
 from   datetime  import datetime
@@ -149,10 +144,10 @@ class HttpSession( object ) :
                 conn, url, method, headers, body
 
         # Handle NOT_MODIFIED
-        rc = self.resp_not_modified(resp, req)
-        if rc != None : return rc
+        #rc = self.resp_not_modified(resp, req)
+        #if rc != None : return rc
 
-        self.cache.pop( url, None )
+        #self.cache.pop( url, None )
 
         # Handle redirects
         rc = self.resp_redirect(resp, req, num_redirects)
@@ -202,9 +197,9 @@ class HttpSession( object ) :
                 raise ServerError((status, error))
 
         # Store cachable responses
-        if not streamed and method == 'GET' and 'etag' in resp.msg:
-            self.cache[url] = (status, resp.msg, data)
-            self.clean_cache() if len(self.cache) > CACHE_SIZE[1] else None
+        #if not streamed and method == 'GET' and 'etag' in resp.msg:
+        #    self.cache[url] = (status, resp.msg, data)
+        #    self.clean_cache() if len(self.cache) > CACHE_SIZE[1] else None
 
         if not streamed and data is not None:
             data = StringIO(data)
@@ -265,9 +260,10 @@ class HttpSession( object ) :
         headers = {}
 
         # Cached Etag
-        if method in ('GET', 'HEAD') :
-            etag = self.cache.get( url, [None, {}] )[1].get( 'etag', None )
-            headers.update({ 'If-None-Match' : etag }) if etag else None
+        #if method in ('GET', 'HEAD') :
+        #    etag = self.cache.get( url, [None, {}] )[1].get( 'etag', None )
+        #    headers.update({ 'If-None-Match' : etag }) if etag else None
+
         # JSON body
         if body and (not isinstance( body, basestring ) ) :
             s = StringIO()
@@ -284,7 +280,7 @@ class HttpSession( object ) :
         ) if isinstance( body, basestring
         ) else headers.update({ 'Transfer-Encoding' : 'chunked' })
         # Basc-Authorization
-        headers.update( 'Authorization', basicauth) if basicauth else None
+        headers.update({ 'Authorization': basicauth }) if basicauth else None
 
         return headers, body
 

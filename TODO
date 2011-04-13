@@ -1,2 +1,8 @@
 Track the project at,
     http://couchpy.pluggdapps.com
+
+- For source doc, use class.__doc__ instead of __init__.doc for constructor
+  explanation
+- Composing HTTP headers for request is very primitive, use MultiDict or
+  something similar to HTTPMessage (used for response header) to make it more
+  developer friendly.

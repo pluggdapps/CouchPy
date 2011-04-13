@@ -63,6 +63,8 @@ class Attachment( object ) :
         self.doc = doc
         self.db = doc.db
         self.filename = filename
+        self.conn = doc.conn
+        self.hthdrs = self.conn.mixinhdrs( self.doc.hthdrs, hthdrs )
 
     def __eq__( self, other ) :
         """Compare whether the attachment info and data are same"""
@@ -83,6 +85,7 @@ class Attachment( object ) :
         """Returns the content of the file attached to the document. Can
         optionally take a dictionary of http headers.
         """
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         data, content_type = self.getattachment( 
                                 self.db, self.doc, self.filename, hthdrs=hthdrs
                              )
@@ -101,6 +104,7 @@ class Attachment( object ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc._id
         paths = db.paths + [ id_, filename ]
+        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _readattach( db.conn, paths, hthdrs=hthdrs )
         content_type = h.get( 'Content-Type', None )
         return (d.getvalue(), content_type)
@@ -119,7 +123,7 @@ class Attachment( object ) :
         id_ = doc if isinstance(doc, basestring) else doc._id
         rev = query['rev'] if 'rev' in query else doc._rev
         paths = db.paths + [ id_, filename ]
-        hthdrs = deepcopy( hthdrs )
+        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
         (ctype, enc) = guess_type(filepath)
         hthdrs.update(
             { 'Content-Type' : content_type
@@ -139,6 +143,7 @@ class Attachment( object ) :
         id_ = doc if isinstance(doc, basestring) else doc._id
         rev = query['rev'] if 'rev' in query else doc._rev
         paths = db.paths + [ id_, filename ]
+        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _deleteattach( db.conn, paths, hthdrs=hthdrs, rev=rev )
         if isinstance(doc, Document) and d != None :
             doc.update({ '_rev' : d['rev'] })
