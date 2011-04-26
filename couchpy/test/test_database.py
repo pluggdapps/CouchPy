@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 
-import sys
-import pprint
-import logging
+import sys, pprint, logging
 
 from   couchpy.client       import Client
 from   couchpy.database     import Database
@@ -13,7 +11,7 @@ from   couchpy.httperror    import *
 #   1. Test cases for _changes with,
 #           feed, filter, heartbeat, timeout
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 def _makedoc( **kwargs ) :
     return kwargs 

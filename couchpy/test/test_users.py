@@ -5,9 +5,8 @@ from   random   import choice
 
 from   couchpy.client       import Client
 from   couchpy.database     import Database
-from   couchpy.httperror    import configlog
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 def populate_user( c ) :
     log.info( "Testing client ..." )

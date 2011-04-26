@@ -57,24 +57,24 @@ Copy document,
 
 """
 
-import sys, re, json, time
+import sys, re, json, time, logging, base64
 from   os.path            import basename
 from   copy               import deepcopy
 from   StringIO           import StringIO
 from   mimetypes          import guess_type
-import base64
 
-from   httperror          import *
-from   httpc              import HttpSession, ResourceNotFound, OK, CREATED
+from   couchpy.httperror  import *
+from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED, \
+                                 ACCEPTED
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
-import rest
+import couchpy.rest       as rest
 
 # TODO :
 #   1. Batch mode POST / PUT should have a verification system built into it.
 #   2. Attachments allowed in local documents ???
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 """ Document Structure
 {
@@ -106,9 +106,12 @@ def _createdoc( conn, doc, paths=[], hthdrs={}, **query ) :
         batch='ok'
     """
     body = rest.data2json( doc )
+    batch = query.get( 'batch', None )
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
-    if s == CREATED and d['ok'] == True :
+    if batch == 'ok' and s == ACCEPTED and d['ok'] == True :
+        return s, h, d
+    elif s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -152,9 +155,12 @@ def _updatedoc( conn, doc, paths=[], hthdrs={}, **query ) :
     if '_local' not in paths and '_rev' not in doc :
         raise CouchPyError( '`_rev` to be supplied while updating the doc' )
     body = rest.data2json( doc )
+    batch = query.get( 'batch', None )
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body, _query=query.items() )
-    if s == CREATED and d['ok'] == True :
+    if batch == 'ok' and s == ACCEPTED and d['ok'] == True :
+        return s, h, d
+    elif s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -263,12 +269,14 @@ class Document( object ) :
         """Yield document's key,value pair for every iteration"""
         return iter( self.doc.items() )
 
-    def __call__( self, hthdrs={}, **query ) :
+    def __call__( self, fetch=False, hthdrs={}, **query ) :
         """If no argument is speficied, refresh the document from database.
         Optionally accepts HTTP headers `hthdrs`.
 
         Optional arguments:
 
+        ``fetch``,
+            If True, then the document is fetched with-out check of Etags.
         ``rev``,
             If specified, and not the same as this Document object's
             revision, create a fresh :class:`Document` object corresponding to
@@ -298,7 +306,7 @@ class Document( object ) :
             return self.__class__( self.db, self.doc, hthdrs=h, rev=rev )
         elif revs == True :
             q = { 'revs' : 'true' }
-            if self.revs :
+            if self.revs and fetch == False:
                 s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
                 if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self.revs
@@ -307,15 +315,19 @@ class Document( object ) :
             return self.revs
         elif revs_info == True :
             q = { 'revs_info' : 'true' }
-            if self.revs_info :
+            if self.revs_info and fetch == False :
                 s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
                 if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self.revs_info
             s, h_, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs_info = d
             return self.revs_info
+        elif self.doc['_rev'] == None :
+            s, h_, d = _readdoc( conn, paths, hthdrs=h )
+            self.doc = d
+            return self
         else :
-            if self.doc :
+            if self.doc and fetch == False :
                 s, h_, d = _headdoc( conn, paths, hthdrs=h )
                 if s == OK and h_['Etag'] == self.doc['_rev'] :
                     return self
@@ -327,6 +339,10 @@ class Document( object ) :
         _id = self.doc.get('_id', None)
         _rev = self.doc.get('_rev', None)
         return '<%s %r:%r>' % (type(self).__name__, _id, _rev)
+
+    def get( self, *args, **kwargs ) :
+        """Similar to dictionary `get` method"""
+        return self.doc.get( *args, **kwargs )
 
     def items( self ) :
         """Return a list of (key,value) pairs in this document"""
@@ -357,6 +373,12 @@ class Document( object ) :
         content into the database. To refresh the document object, do,
         `doc()`.
 
+        query parameters,
+
+        ``batch``,
+            if specified 'ok', allow document store request to be batched
+            with others.
+
         Admin-prev, No
         """
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
@@ -364,29 +386,33 @@ class Document( object ) :
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
-        self.doc.update({ '_rev' : d['rev'] }) if d else None
+        self.doc.update({ '_rev' : d.get('rev', None) }) if d else None
         return None
 
     def write( self, doc=None, hthdrs={}, **query ) :
         """Write the next version of the document. `_id` and `_rev` will be
         gathered from Document object, ``doc`` should be a dictionary object
-        representing the document.
-        Optionally accepts HTTP headers `hthdrs`.  Calling it with empty
-        argument will simply put the existing document content into the
-        database. To refresh the document object, do, `doc()`.
+        representing the document. The difference between ``update`` method
+        and this one is that, the document will be written exactly as provided
+        by doc.  Optionally accepts HTTP headers `hthdrs`. To refresh the
+        document object, do, `doc()`.
+
+        query parameters,
+
+        ``batch``,
+            if specified 'ok', allow document store request to be batched
+            with others.
 
         Admin-prev, No
         """
-        [ using.pop( k, None ) for k in ['_id', '_rev'] ]
-        d = { 
-            '_id' : doc.get( '_id', self.doc['_id'] ),
-            '_rev' : doc.get( '_rev', self.doc['_rev'] ),
+        d = { '_id' : doc.get( '_id', self.doc['_id'] ),
+              '_rev' : doc.get( '_rev', self.doc['_rev'] ),
         }
         d.update( doc )
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
-        self.doc.update({ '_rev' : d['rev'] }) if d else None
+        s, h, d = _updatedoc( conn, d, paths, hthdrs=hthdrs, **query )
+        self.doc.update({ '_rev' : d.get('rev', None) }) if d else None
         return None
 
     def delitem( self, key ) :
@@ -539,7 +565,9 @@ class Document( object ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
-        q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        rev = (query if isinstance(doc, basestring) else doc).get('rev', None)
+        rev = doc()['_rev'] if rev == None else rev
+        q = { 'rev' : rev }
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
@@ -581,6 +609,14 @@ class Document( object ) :
         return not (docid in cls.SPECIAL_DOC_NAMES)
 
 
+    #---- Method to be implemented by derived class
+
+    def normalizeforjson( self ) :
+        """Normalize the document (key,value)s for JSON serialization,
+        typically for browser consumption"""
+        pass
+
+
 
 class LocalDocument( Document ) :
 
@@ -605,7 +641,7 @@ class LocalDocument( Document ) :
         self.revs_info = None       # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = self.conn.mixinhdrs( client.hthdrs, db.hthdrs, hthdrs )
+        self.hthdrs = self.conn.mixinhdrs( db.hthdrs, hthdrs )
 
     @classmethod
     def create( cls, db, doc, attachfiles=[], hthdrs={}, fetch=True, **query ) :
@@ -628,7 +664,7 @@ class LocalDocument( Document ) :
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         if fetch != True :
-            doc.update({ '_rev' : d['rev'] })
+            doc.update({ '_rev' : d.get('rev', None) })
         return LocalDocument( db, doc, fetch=fetch )
 
     @classmethod
@@ -641,7 +677,9 @@ class LocalDocument( Document ) :
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
-        q = query if isinstance(doc, basestring) else { 'rev' : doc['_rev'] } 
+        rev = (query if isinstance(doc, basestring) else doc).get('_rev', None)
+        rev = doc()['_rev'] if rev == None else rev
+        q = { 'rev' : rev }
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d

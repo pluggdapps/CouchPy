@@ -1,14 +1,12 @@
 #! /usr/bin/env python
 
-import sys
-import pprint
-import logging
+import sys, pprint, logging
 
-from   client     import Client
-from   database   import Database
-from   httperror   import *
+from   client       import Client
+from   database     import Database
+from   httperror    import *
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 def test_get_database() :
     log.info( "Testing Get database ..." )

@@ -1,11 +1,7 @@
 #! /usr/bin/env python
 
-import sys
-import pprint
-import logging
-import time
-import pprint
-from   random   import choice
+import sys, logging, time, pprint
+from   random           import choice
 
 # TODO : 
 #   1. Config PUT and DELETE
@@ -13,9 +9,8 @@ from   random   import choice
 
 from couchpy.client     import Client
 from couchpy.database   import Database
-from couchpy.httperror  import configlog
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 def test_client() :
     log.info( "Testing client ..." )

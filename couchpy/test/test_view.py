@@ -1,15 +1,13 @@
 #! /usr/bin/env python
 
-import sys
-import pprint
-import logging
+import sys, pprint, logging
 
 from   couchpy.client       import Client
 from   couchpy.database     import Database
 from   couchpy.query        import Query
 from   httperror            import *
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 def test_query() :
     log.info( "Testing query ..." )

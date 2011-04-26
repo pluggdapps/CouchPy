@@ -105,14 +105,3 @@ hterr_class = {
     416 : RangeNotSatisfiable,
     417 : ExpectationFailed
 }
-
-import logging, sys
-def configlog( name, level=logging.INFO ) :
-    log = logging.getLogger( name )
-    log.setLevel( level )
-    fmt = '%(levelname)s, %(module)s:%(funcName)s:%(lineno)s %(message)s'
-    ch = logging.StreamHandler( sys.stdout )
-    ch.setFormatter(logging.Formatter(fmt) )
-    log.addHandler( ch )
-    return log
-

@@ -16,9 +16,8 @@ from   urlparse import urlsplit, urlunsplit
 from   StringIO import StringIO
 
 import httpc
-from   httperror   import configlog
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 
 class ReSTful(object) :
     """
@@ -149,7 +148,7 @@ class ReSTful(object) :
         paths = paths.split('/') if isinstance( paths, basestring ) else paths
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
-        log.debug( "%10s %s" % (method, url) )
+        log.info( "%6s %s" % (method, url) )
         resp = self.htsession.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
@@ -242,7 +241,8 @@ def _urlencode( data ) :
     data = data.items() if isinstance(data, dict) else data
     fn = lambda v : v.encode('utf-8') if isinstance(v, unicode) else v
     params = [ (name, fn(value)) for name, value in data ]
-    return urllib.urlencode(params)
+    query = '&'.join([ '%s=%s'%(k,v) for k, v in  params ])
+    return urllib.quote(query, '&=\'"')
 
 def _normalize( val ) :
     if val == True : return 'true'

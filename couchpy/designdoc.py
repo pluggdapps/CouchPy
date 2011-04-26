@@ -1,15 +1,19 @@
 from   copy               import deepcopy
+import logging
 
-from   httperror          import *
-from   httpc              import HttpSession, ResourceNotFound, OK, CREATED
+from   couchpy.httperror  import *
+from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
+import couchpy.rest       as rest
 
 # TODO :
 #   1. List, Update and Rewirte APIs are still being defined.
 #   2. HEAD method is not supported for design-documents ??? If available, can
 #   be used for caching
 #   3. Are attachments supported in design document ???
+
+log = logging.getLogger( __name__ )
 
 """ Design document structure,
 {
@@ -62,7 +66,7 @@ def _updatesgn( conn, doc, paths=[], hthdrs={} ) :
     body = rest.data2json( doc )
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, body )
-    if s == OK and d['ok'] == True :
+    if s == CREATED and d['ok'] == True :
         return s, h, d
     else :
         return (None, None, None)
@@ -287,7 +291,7 @@ class DesignDocument( object ) :
         self.doc.update( using )
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _updatesgn( conn, self.doc, paths, hthdrs=hthdrs, **query )
+        s, h, d = _updatesgn( conn, self.doc, paths, hthdrs=hthdrs )
         self.doc.update({ '_rev' : d['rev'] }) if d else None
         return None
 
@@ -396,17 +400,21 @@ class DesignDocument( object ) :
     views = property( lambda self : self.doc.get('views', {}) )
 
     @classmethod
-    def create( cls, db, doc, hthdrs={} ) :
+    def create( cls, db, doc, hthdrs={}, fetch=False ) :
         """Create a new design-document ``doc`` in the specified database
         ``db``. ``db`` must be :class:`couchpy.database.Database` object.
         ``doc`` will be converted to JSON structure before inserting it into
         the database. If ``doc`` has a key by name the ``_id``, then the 
         design-document will be created with that ID, else, a new unique ID
-        will be generated. Return :class:`DesignDocument` object
+        will be generated. Return :class:`DesignDocument` object.
+
+        By default the document is not fetched back from the database before
+        returning. To force a fetch (refresh) pass the key-word argument
+        ``fetch`` as True.
 
         Admin-prev, No
         """
-        id_ = self.id2name(doc['_id'])
+        id_ = cls.id2name(doc['_id'])
         if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_design', id_ ]
@@ -414,7 +422,7 @@ class DesignDocument( object ) :
         s, h, d = _updatesgn( db.conn, doc, paths, hthdrs )
         if d == None : return None
         doc.update({ '_id' : d['id'], '_rev' : d['rev'] })
-        return DesignDocument( db, doc, fetch=False )
+        return DesignDocument( db, doc, fetch=fetch )
 
     @classmethod
     def delete( cls, db, doc, hthdrs={}, **query ) :
@@ -433,7 +441,7 @@ class DesignDocument( object ) :
         Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        id_ = self.id2name(id_)
+        id_ = cls.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletesgn( db.conn, paths, hthdrs, **query )
@@ -451,14 +459,14 @@ class DesignDocument( object ) :
         Admin-prev, No
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
-        id_ = self.id2name(id_)
+        id_ = cls.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
         hthdrs = { 'Destination' : dest }
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copysgn( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
-            return DesignDocument( self.db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
+            return DesignDocument( db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
         else :
             return None
 
@@ -468,5 +476,10 @@ class DesignDocument( object ) :
     def validate_docid( cls, docid ) :
         return not (docid in cls.SPECIAL_DOC_NAMES)
 
-    def id2name( self, id_ ) :
-        return id_[7:] if id_.startswith( '_design' ) else id_
+
+    #---- Helper methods
+
+    @classmethod
+    def id2name( cls, id_ ) :
+        return id_[8:] if id_.startswith( '_design/' ) else id_
+

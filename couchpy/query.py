@@ -23,7 +23,10 @@ Query factories
 
 """
 
+import logging
 from   copy             import deepcopy
+
+log = logging.getLogger( __name__ )
 
 class Query( object ) :
     def __init__( self, params={}, **q ) :

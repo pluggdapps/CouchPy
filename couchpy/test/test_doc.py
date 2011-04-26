@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 
-import sys, os
-import pprint
-import logging
+import sys, os, pprint, logging
 from   os.path      import join, abspath, basename, splitext
 
 import couchpy
@@ -15,7 +13,7 @@ from   couchpy.httperror import *
 #   1. hthdrs will be remembered. Test that !!
 #   2. Attachments for local document
 
-log = configlog( __name__ )
+log = logging.getLogger( __name__ )
 files = map(
           lambda f : abspath(f),
           filter( lambda f : splitext(f)[1]=='.py', os.listdir('.') )

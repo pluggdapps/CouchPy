@@ -11,7 +11,7 @@ standard library.
 # TODO :
 #   1. Document this module
 
-import sys, socket, time, errno, urllib, json
+import sys, socket, time, errno, urllib, json, logging
 from   urlparse  import urlsplit, urlunsplit
 from   base64    import b64encode
 from   datetime  import datetime
@@ -28,6 +28,8 @@ except ImportError:
     from dummy_threading import Lock
 
 from   httperror import *
+
+log = logging.getLogger( __name__ )
 
 __all__ = [ 'Session' ]
 

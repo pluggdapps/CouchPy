@@ -1,10 +1,10 @@
 """Module provides provides a convinient class :class:`Attachment` to access (Create,
 Read, Delete) document attachments."""
 
+import base64, logging
 from   os.path              import basename
 from   copy                 import deepcopy
 from   mimetypes            import guess_type
-import base64
 
 from   httperror            import *
 from   httpc                import HttpSession, ResourceNotFound, OK, CREATED
@@ -12,6 +12,8 @@ from   couchpy              import CouchPyError
 
 # TODO :
 #   1. URL-encoding for attachment file-names
+
+log = logging.getLogger( __name__ )
 
 def _readattach( conn, paths=[], hthdrs={} ) :
     """

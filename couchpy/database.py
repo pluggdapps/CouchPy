@@ -8,7 +8,7 @@ Create a client object,
 >>> c = Client()
 >>> db = c.create('dbname_first') # Create
 """
-import sys, re
+import sys, re, logging
 
 import couchpy.rest       as rest
 from   couchpy.httperror  import *
@@ -28,6 +28,7 @@ from   couchpy.query      import Query
 #   3. _missing_revs, _revs_diff, _security
 #   6. Should we provide attachment facilities for local docs ?
 
+log = logging.getLogger( __name__ )
 hdr_acceptjs = { 'Accept' : 'application/json' }
 hdr_ctypejs = { 'Content-Type' : 'application/json' }
 
@@ -527,7 +528,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_all_docs'])
-        q = dict( _q.items() )
+        q = _q if isinstance(_q, Query) else Query( params=dict(_q.items()) )
         q.update( query )
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
@@ -621,21 +622,21 @@ class Database( object ) :
 
         Admin-Prev, No
         """
+        def delete( cls, docs_, hthdrs={}, rev=None ) :
+            if isinstance( docs_, (list,tuple) ) :
+                for doc in docs_ :
+                    if isinstance(doc, cls) :
+                        cls.delete( self, doc, hthdrs=hthdrs, rev=rev )
+                    else :
+                        doc, rev = doc
+                        cls.delete( self, doc, hthdrs=hthdrs, rev=rev )
+            else :
+                cls.delete( self, docs_, hthdrs=h, rev=rev )
+
         h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
-        if docs != None and isinstance(docs, (list, tuple)) :
-            [Document.delete(self, doc, hthdrs=h, rev=rev) for doc,rev in docs]
-        elif docs != None :
-            Document.delete( self, docs, hthdrs=h, rev=rev )
-        elif localdocs != None and isinstance(docs, (list, tuple)) :
-            [ LocalDocument.delete(self, doc, hthdrs=h, rev=rev) 
-              for doc, rev in localdocs]
-        elif localdocs != None :
-            LocalDocument.delete( self, localdocs, hthdrs=h, rev=rev )
-        elif designdocs != None and isinstance(designdocs, (list,tuple)) :
-            [ DesignDocument.delete(self, doc, hthdrs=h, rev=rev) 
-              for doc, rev in designdocs ]
-        elif designdocs != None :
-            DesignDocument.delete(self, designdocs, hthdrs=h, rev=rev)
+        if docs != None : delete( Document, docs, hthdrs=h, rev=rev )
+        elif localdocs != None : delete(LocalDocument, docs, hthdrs=h, rev=rev)
+        elif designdocs != None : delete(DesignDocument, docs, hthdrs=h, rev=rev)
         return None
 
     def designdocs( self, keys=None, hthdrs={}, **query ) :

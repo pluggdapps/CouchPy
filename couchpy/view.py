@@ -1,8 +1,13 @@
 """View class to contruct, fetch CoucDB database views."""
 
-from   copy             import deepcopy
-from   couchpy.query    import Query
+from   copy                 import deepcopy
+import logging
 
+from   couchpy.query        import Query
+from   couchpy.designdoc    import DesignDocument
+from   couchpy.httpc        import HttpSession, ResourceNotFound, OK, CREATED
+
+log = logging.getLogger( __name__ )
 hdr_acceptjs = { 'Accept' : 'application/json' }
 hdr_ctypejs  = { 'Content-Type' : 'application/json' }
 
@@ -34,9 +39,9 @@ def _viewsgn( conn, keys=None, paths=[], hthdrs={}, q={} ) :
 
 class View( object ) :
     def __init__( self, db, designdoc, viewname, hthdrs={}, _q={}, **query ) :
-        """Instantiate a view from database base `db` under `designdoc`.
-        `viewname` should be the name of the view as defined by the designdoc.
-        Optionally pass the `_q` Query object (or dictionary of query params)
+        """Instantiate a view from database base ``db`` under ``designdoc``.
+        ``viewname`` should be the name of the view as defined by the designdoc.
+        Optionally pass the ``_q`` Query object (or dictionary of query params)
         to initialize the default query. query-parameters can also be passed
         in as key-word arguments
         """
@@ -44,7 +49,13 @@ class View( object ) :
         self.conn = db.conn
         self.client = db.client
         self.debug = db.debug
-        self.paths = designdoc.paths + [ '_view', viewname ]
+        if isinstance(designdoc, basestring) :
+            p = db.paths + designdoc.split('/')
+        elif isinstance(designdoc, list) :
+            p = db.paths + designdoc
+        elif isinstance(designdoc, DesignDocument) :
+            p = designdoc.paths
+        self.paths = p + ['_view', viewname]
         q = _q if isinstance(_q, Query) else Query( params=_q )
         q.update( query )
         self.hthdrs = self.conn.mixinhdrs( db.hthdrs, hthdrs )
@@ -58,7 +69,7 @@ class View( object ) :
         Admin-prev,
             No
         """
-        q = self.q if _q == None else _q
+        q = deepcopy( self.q if _q == None else _q )
         q.update( query )
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )

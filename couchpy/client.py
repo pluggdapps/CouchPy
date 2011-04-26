@@ -60,28 +60,28 @@ True
 # file 'LICENSE', which is part of this source code package.
 #       Copyright (c) 2010 SKR Farms (P) LTD.
 
-import os, sys
+import os, sys, logging
 from   copy             import deepcopy
 from   Cookie           import SimpleCookie
 
 import rest
-from   httpc            import HttpSession, OK
+from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
 
 # TODO :
 #   1. Fix `replicate()` method.
 #   2. Deleteing configuration section/key seems to have some complex options.
 #      But the API doc is not clear about it.
-#   3. Move configlog from httperror to __init__.py
 #   4. Logging is just not working.
 #   5. Test cases for addadmin(), deladmin(), admins().
 
+log = logging.getLogger( __name__ )
 __VERSION__ = '0.1'
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
-log = configlog( __name__ )
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
+hdr_ctypejs = { 'Content-Type' : 'application/json' }
 
 def _headsrv( conn, paths=[], hthdrs={} ) :
     """HEAD /"""
@@ -151,10 +151,10 @@ def _uuids( conn, paths=[], hthdrs={}, **query ) :
 
 def _replicate( conn, body, paths=[], hthdrs={} ) :
     """POST /_replicate"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     body = rest.data2json( body )
     s, h, d = conn.post( paths, hthdrs, body )
-    if s == OK :
+    if s == ACCEPTED and d['ok'] :
         return s, h, d
     else :
         return (None, None, None)
@@ -176,7 +176,7 @@ def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     PUT /_config/<section>/<key>
     DELETE /_config/<section>/<key>
     """
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if 'value' in kwargs :      # PUT
         body = rest.data2json( kwargs['value'] )
         s, h, d = conn.put( paths, hthdrs, body )
@@ -406,7 +406,7 @@ class Client( object ) :
         ``cancel``,
             Cancels the replication
         ``continuous``,
-            Configure the replication to be continuous
+            Boolean to configure the replication to be continuous
         ``create_target``,
             Creates the target database
         ``doc_ids``,
@@ -418,9 +418,6 @@ class Client( object ) :
         # request body
         body = {'source': source, 'target': target}
         body.update(options)
-        data = StringIO()
-        json.dump(body, data)
-        body = data.getvalue()
         # request header
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _replicate( conn, body, paths, hthdrs=hthdrs )
