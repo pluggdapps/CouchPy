@@ -111,7 +111,7 @@ def _bulk_docs( conn, docs, atomic=False, paths=[], hthdrs={} ) :
     body = rest.data2json( docs )
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, body )
-    if s == OK :
+    if s == CREATED :
         return s, h, d
     else :
         return (None, None, None)
@@ -570,7 +570,8 @@ class Database( object ) :
         return d
 
     def createdoc( self, docs=None, localdocs=None, designdocs=None,
-                   filepaths=[], doc_cls=None, hthdrs={}, **query ) :
+                   filepaths=[], doc_cls=None, hthdrs={}, fetch=False,
+                   **query ) :
         """Create one or more document in this database. Documents can be of
         Normal documents, Local documents Design document.
 
@@ -592,21 +593,34 @@ class Database( object ) :
         h = conn.mixinhdrs( self.hthdrs, hthdrs )
         r = None
         if docs != None and doc_cls != None :
-            r = [ doc_cls.create(self, doc, hthdrs=h, **q) for doc in docs ]
+            r = [ doc_cls.create(self, doc, hthdrs=h, fetch=fetch, **q)
+                  for doc in docs ]
+
         elif docs != None and isinstance( docs, (list, tuple) ) :
-            r = [ Document.create(self, doc, hthdrs=h, **q) for doc in docs ]
+            r = [ Document.create(self, doc, hthdrs=h, fetch=fetch, **q)
+                  for doc in docs ]
+
         elif docs != None :
-            r = Document.create( self, docs, attachfiles=f, hthdrs=h, **q )
+            r = Document.create(
+                    self, docs, attachfiles=f, hthdrs=h, fetch=fetch, **q
+                )
+
         elif localdocs != None and isinstance( localdocs, (list, tuple) ) :
-            r = [ LocalDocument.create(self, doc, hthdrs=h, **q)
+            r = [ LocalDocument.create(self, doc, hthdrs=h, fetch=fetch, **q )
                   for doc in localdocs ]
+
         elif localdocs != None :
-            r = LocalDocument.create( self, localdocs, hthdrs=h, **q )
+            r = LocalDocument.create(
+                    self, localdocs, hthdrs=h, fetch=fetch, **q
+                )
+
         elif designdocs != None and isinstance( designdocs, (list,tuple) ) :
-            r = [ DesignDocument.create(self, doc, hthdrs=h) 
+            r = [ DesignDocument.create(self, doc, hthdrs=h, fetch=fetch ) 
                   for doc in designdocs ]
+
         elif designdocs != None :
-            r = DesignDocument.create(self, doc, hthdrs=h)
+            r = DesignDocument.create(self, doc, hthdrs=h, fetch=fetch )
+
         return r
 
     def deletedoc( self, docs=None, localdocs=None, designdocs=None,

@@ -255,7 +255,7 @@ class Document( object ) :
         self.doc.update({ key : value })
         s, h, d = _updatedoc( self.conn, self.doc, self.paths,
                               hthdrs=self.hthdrs )
-        self.doc.update({ '_rev' : d['rev'] }) if d else None
+        self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         self.revs = None            # Enforce a fetch
         self.revs_info = None       # Enforce a fetch
         return None
@@ -386,7 +386,7 @@ class Document( object ) :
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
-        self.doc.update({ '_rev' : d.get('rev', None) }) if d else None
+        self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
 
     def write( self, doc=None, hthdrs={}, **query ) :
@@ -412,7 +412,7 @@ class Document( object ) :
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatedoc( conn, d, paths, hthdrs=hthdrs, **query )
-        self.doc.update({ '_rev' : d.get('rev', None) }) if d else None
+        self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
 
     def delitem( self, key ) :
@@ -457,7 +457,7 @@ class Document( object ) :
                 self.db, self, filepath, data, content_type=content_type,
                 hthdrs=hthdrs, **query
             )
-        self.doc.update({ '_rev' : d['rev'] }) if d != None else None
+        self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return Attachment( self, filename )
 
     def delattach( self, attach, hthdrs={}, **query ) :
@@ -474,7 +474,7 @@ class Document( object ) :
         d = Attachment.delattachment(
                 self.db, self, filename, hthdrs=hthdrs, **query
             )
-        self.doc.update({ '_rev' : d['rev'] }) if d != None else None
+        self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
 
     def attach( self, filename ) :
@@ -545,7 +545,8 @@ class Document( object ) :
         s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         if fetch != True :
-            doc.update({ '_id' : d['id'], '_rev' : d['rev'] })
+            doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
+            doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return Document( db, doc, fetch=fetch )
 
     @classmethod
@@ -664,7 +665,7 @@ class LocalDocument( Document ) :
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         if fetch != True :
-            doc.update({ '_rev' : d.get('rev', None) })
+            doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return LocalDocument( db, doc, fetch=fetch )
 
     @classmethod
