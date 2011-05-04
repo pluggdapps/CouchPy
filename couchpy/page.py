@@ -80,10 +80,11 @@ class Paginate( object ) :
         return q_
 
     def _prune( self, result, key, limit ) :
-        if result['rows'] and (result['rows'][0]['key'] == key) :
-            result['rows'] = result['rows'][1:]
+        rows = result.get( 'rows', [] )
+        if rows and ( rows[0]['key'] == key ) :
+            result['rows'] = rows[1:]
         else :
-            result['rows'] = result['rows'][:limit]
+            result['rows'] = rows[:limit]
         return result
 
     def _updatestartkeys( self, entry ) :
@@ -102,8 +103,7 @@ class Paginate( object ) :
         """
         result = self._view()( _q=self._query() )
         rows = result['rows']
-        self.startkey, self.startkey_docid = rows[0]['key'], rows[0]['id']
-        self.endkey, self.endkey_docid = rows[-1]['key'], rows[-1]['id']
+        self._updatekeys(rows[0], rows[-1]) if sticky and len(rows) else None
         return result
 
     def next( self, limit=None, sticky=True ) :

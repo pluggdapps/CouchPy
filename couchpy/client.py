@@ -67,6 +67,7 @@ from   Cookie           import SimpleCookie
 import rest
 from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
+from   couchpy          import AuthSession
 
 # TODO :
 #   1. Fix `replicate()` method.
@@ -78,6 +79,7 @@ from   httperror        import *
 log = logging.getLogger( __name__ )
 __VERSION__ = '0.1'
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
+DEFAULTUSER = 'anonymous'
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
@@ -247,6 +249,7 @@ class Client( object ) :
         self.htsession, self.debug = htsession, debug
         self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
+        self.authsession = AuthSession()
         cookie != None and self.conn.savecookie( self.hthdrs, cookie )
 
     #---- Pythonification, all the methods are just wrappers around the API
@@ -518,6 +521,12 @@ class Client( object ) :
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _session( conn, paths, hthdrs=hthdrs )
         return d
+
+    def sessionuser( self ) :
+        if self.authsession.userCtx :
+            return self.authsession.userCtx.get( 'name', DEFAULTUSER )
+        else :
+            return DEFAULTUSER
         
 
     #---- Database,
