@@ -13,6 +13,7 @@ lextab.py
 couchpy.egg-info/
 ./build/
 ./dist/
+distribute-0.6.10.tar.gz
 # switch to regexp syntax.
 syntax: regexp
 ^\.pc/

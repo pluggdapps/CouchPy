@@ -254,7 +254,7 @@ class DesignDocument( object ) :
     def __repr__( self ) :
         _id = self.doc.get('_id', None)
         _rev = self.doc.get('_rev', None)
-        return '<%s %r:%r>' % (type(self).__name__, _id, _rev)
+        return '<%r:%r>' % (_id, _rev)
 
     def items( self ) :
         """Return a list of (key,value) pairs in this design-document"""

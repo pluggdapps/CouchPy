@@ -79,7 +79,6 @@ from   couchpy          import AuthSession
 log = logging.getLogger( __name__ )
 __VERSION__ = '0.1'
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
-DEFAULTUSER = 'anonymous'
 
 hdr_acceptjs = { 'Accept' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
@@ -212,6 +211,8 @@ def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
 
 class Client( object ) :
 
+    DEFAULTUSER = 'anonymous'
+
     def __init__( self, url=DEFAULT_URL, **kwargs) :
         """Initialize a client object, with the base `url` and optional
         key-word arguments.
@@ -232,6 +233,8 @@ class Client( object ) :
             for enhanced logging
         ``cookie``,
             `SimpleCookie` cookie object, that can be used to populate headers
+        ``defaultuser``,
+            Default-user to be returned when user session is not authenticated
         """
         self.url = url
 
@@ -240,6 +243,7 @@ class Client( object ) :
         htsession = kwargs.get( 'htsession', HttpSession() )
         debug = kwargs.get( 'debug', False )
         cookie = kwargs.get( 'cookie', None )
+        self.defaultuser = kwargs.get( 'defaultuser', self.DEFAULTUSER )
 
         hthdrs = {
             'X-Couch-Full-Commit' :  str(full_commit).lower()
@@ -249,8 +253,8 @@ class Client( object ) :
         self.htsession, self.debug = htsession, debug
         self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
-        self.authsession = AuthSession()
         cookie != None and self.conn.savecookie( self.hthdrs, cookie )
+        self._authsession = None
 
     #---- Pythonification, all the methods are just wrappers around the API
     #---- methods
@@ -517,16 +521,19 @@ class Client( object ) :
     def authsession( self, hthdrs={} ) :
         """Fetch the authenticated session information for this client. Note
         that browser-session is not handled by the client."""
-        conn, paths = self.conn, ['_session']
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _session( conn, paths, hthdrs=hthdrs )
-        return d
+        if self._authsession == None :
+            conn, paths = self.conn, ['_session']
+            hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+            s, h, d = _session( conn, paths, hthdrs=hthdrs )
+            self._authsession = AuthSession(d)
+        return self._authsession
 
     def sessionuser( self ) :
-        if self.authsession.userCtx :
-            return self.authsession.userCtx.get( 'name', DEFAULTUSER )
+        session = self.authsession()
+        if session.userCtx :
+            return session.userCtx.get( 'name', self.defaultuser )
         else :
-            return DEFAULTUSER
+            return self.defaultuser
         
 
     #---- Database,
