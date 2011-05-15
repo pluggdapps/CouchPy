@@ -532,8 +532,8 @@ class Document( object ) :
 
         Admin-prev, No
         """
-        id_ = [ doc['_id'] ] if '_id' in doc else []
-        if not cls.validate_docid(id_) : 
+        id_ = doc['_id'] if '_id' in doc else ''
+        if id_ and not cls.validate_docid(id_) : 
             return None
         paths = db.paths
         attachs = Attachment.files2attach(attachfiles)
@@ -544,9 +544,8 @@ class Document( object ) :
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
-        if fetch != True :
-            doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
-            doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
+        doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
+        doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return Document( db, doc, fetch=fetch )
 
     @classmethod
@@ -652,8 +651,8 @@ class LocalDocument( Document ) :
 
         Refer to, :func:`Document.create`
         """
-        id_ = doc['_id']
-        if not cls.validate_docid(id_) : 
+        id_ = doc['_id'] if '_id' in doc else ''
+        if id_ and not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_local', id_ ]
         attachs = Attachment.files2attach(attachfiles)
@@ -664,8 +663,8 @@ class LocalDocument( Document ) :
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
-        if fetch != True :
-            doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
+        doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
+        doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return LocalDocument( db, doc, fetch=fetch )
 
     @classmethod
