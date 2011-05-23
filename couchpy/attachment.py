@@ -9,6 +9,7 @@ from   mimetypes            import guess_type
 from   httperror            import *
 from   httpc                import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy              import CouchPyError
+from   couchpy.mixins       import Helpers
 
 # TODO :
 #   1. URL-encoding for attachment file-names
@@ -56,7 +57,7 @@ def _deleteattach( conn, paths=[], hthdrs={}, **query ) :
     else :
         return (None, None, None)
 
-class Attachment( object ) :
+class Attachment( object, Helpers ) :
     def __init__( self, doc, filename ) :
         """Class instance object represents a single attachment in a document,
         use the :class:`Document` object and attachment `filename` to create
@@ -66,7 +67,7 @@ class Attachment( object ) :
         self.db = doc.db
         self.filename = filename
         self.conn = doc.conn
-        self.hthdrs = self.conn.mixinhdrs( self.doc.hthdrs, hthdrs )
+        self.hthdrs = self.mixinhdrs( self.doc.hthdrs, hthdrs )
 
     def __eq__( self, other ) :
         """Compare whether the attachment info and data are same"""
@@ -87,7 +88,7 @@ class Attachment( object ) :
         """Returns the content of the file attached to the document. Can
         optionally take a dictionary of http headers.
         """
-        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         data, content_type = self.getattachment( 
                                 self.db, self.doc, self.filename, hthdrs=hthdrs
                              )
@@ -106,7 +107,7 @@ class Attachment( object ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc._id
         paths = db.paths + [ id_, filename ]
-        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = db.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _readattach( db.conn, paths, hthdrs=hthdrs )
         content_type = h.get( 'Content-Type', None )
         return (d.getvalue(), content_type)
@@ -125,7 +126,7 @@ class Attachment( object ) :
         id_ = doc if isinstance(doc, basestring) else doc._id
         rev = query['rev'] if 'rev' in query else doc._rev
         paths = db.paths + [ id_, filename ]
-        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = db.mixinhdrs( self.hthdrs, hthdrs )
         (ctype, enc) = guess_type(filepath)
         hthdrs.update(
             { 'Content-Type' : content_type
@@ -145,7 +146,7 @@ class Attachment( object ) :
         id_ = doc if isinstance(doc, basestring) else doc._id
         rev = query['rev'] if 'rev' in query else doc._rev
         paths = db.paths + [ id_, filename ]
-        hthdrs = db.conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = db.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _deleteattach( db.conn, paths, hthdrs=hthdrs, rev=rev )
         if isinstance(doc, Document) and d != None :
             doc.update({ '_rev' : d['rev'] })

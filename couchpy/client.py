@@ -68,6 +68,7 @@ import rest
 from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
 from   couchpy          import AuthSession
+from   couchpy.mixins   import Helpers
 
 # TODO :
 #   1. Fix `replicate()` method.
@@ -209,7 +210,7 @@ def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
     else :
         return (None, None, None)
 
-class Client( object ) :
+class Client( object, Helpers ) :
 
     DEFAULTUSER = 'anonymous'
 
@@ -223,10 +224,10 @@ class Client( object ) :
         ``full_commit``,
             Boolean, turn on the X-Couch-Full-Commit header
         ``hthdrs``,
-            Dictionary of HTTP request headers. The header fields and values
-            will be remembered for every request made via this client.
-            Aside from these headers, if a method supports `hthdrs` key-word
-            argument, it will be used for a single request.
+            Dictionary of HTTP request headers, remembered at the instance
+            level.  Aside from these headers, if a method supports `hthdrs` key-word
+            argument, it will be used (along with instance-level headers) for a
+            single call.
         ``session``,
             :class:`httpc.HttpSession` instance or None for a default session
         ``debug``, 
@@ -234,30 +235,30 @@ class Client( object ) :
         ``cookie``,
             `SimpleCookie` cookie object, that can be used to populate headers
         ``defaultuser``,
-            Default-user to be returned when user session is not authenticated
+            Default-user to be returned when user session is not
+            authenticated. Used by sessionuser() method.
         """
         self.url = url
 
-        full_commit = kwargs.get( 'full_commit', None )
-        hthdrs = kwargs.get( 'hthdrs', {} )
-        htsession = kwargs.get( 'htsession', HttpSession() )
-        debug = kwargs.get( 'debug', False )
-        cookie = kwargs.get( 'cookie', None )
+        self.full_commit = full_commit = kwargs.get( 'full_commit', None )
+        self.htsession = htsession = kwargs.get( 'htsession', HttpSession() )
+        self.debug = debug = kwargs.get( 'debug', False )
+        self.cookie = cookie = kwargs.get( 'cookie', None )
         self.defaultuser = kwargs.get( 'defaultuser', self.DEFAULTUSER )
+        hthdrs = kwargs.get( 'hthdrs', {} )
 
-        hthdrs = {
-            'X-Couch-Full-Commit' :  str(full_commit).lower()
-        } if full_commit != None else {}
+        if full_commit != None :
+            hthdrs.update({ 'X-Couch-Full-Commit' : str(full_commit).lower() })
 
         self.conn = rest.ReSTful( self.url, htsession, headers=hthdrs )
-        self.htsession, self.debug = htsession, debug
-        self.hthdrs = self.conn.mixinhdrs( hthdrs )
+        self.hthdrs = self.mixinhdrs( hthdrs )
         self.paths = []
-        cookie != None and self.conn.savecookie( self.hthdrs, cookie )
+        # Loaded the saved cookie so that 
+        cookie != None and self.savecookie( self.hthdrs, cookie )
         self._authsession = None
 
-    #---- Pythonification, all the methods are just wrappers around the API
-    #---- methods
+    #---- Pythonification of instance methods. They are supposed to be
+    # wrappers around the actual API.
 
     def __contains__( self, name ) :
         """Return True or False based on whether the server contains
@@ -318,8 +319,7 @@ class Client( object ) :
 
     def version( self ) :
         """Version string from CouchDB server."""
-        d = self()
-        return d.get('version', None) if d else None
+        return self().get( 'version', None )
 
     def active_tasks( self, hthdrs={} ) :
         """Obtain a list of active tasks. The result is a JSON converted array of
@@ -339,7 +339,7 @@ class Client( object ) :
         Admin-Prev, No
         """
         conn, paths = self.conn, (self.paths + [ '_active_tasks' ])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _active_tasks( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -351,7 +351,7 @@ class Client( object ) :
         """
         from   database     import Database
         conn, paths, debug = self.conn, (self.paths + [ '_all_dbs' ]), self.debug
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
         return [ Database( self, n, debug=debug) for n in d ] if d else []
 
@@ -363,7 +363,7 @@ class Client( object ) :
         Admin-Prev, Yes
         """
         conn, paths = self.conn, (self.paths + [ '_restart' ])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _restart( conn, paths, hthdrs=hthdrs )
         return d['ok'] if (s==OK) else False
 
@@ -381,7 +381,7 @@ class Client( object ) :
         Admin-Prev, No
         """
         conn, paths = self.conn, (['_stats'] + list(paths))
-        hthdrs = conn.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
+        hthdrs = self.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
         s, h, d = _stats( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -391,7 +391,7 @@ class Client( object ) :
         """
         q =  { 'count' : count } if isinstance(count, (int,long)) else {}
         conn, paths = self.conn, (self.paths + ['_uuids'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _uuids( conn, paths, hthdrs=hthdrs, **q )
         return d['uuids'] if s == OK else None
 
@@ -421,12 +421,12 @@ class Client( object ) :
         ``proxy``,
             Address of a proxy server through which replication should occur
         """
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         conn, paths = self.conn, (self.paths + ['_replicate'])
         # request body
         body = {'source': source, 'target': target}
         body.update(options)
         # request header
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _replicate( conn, body, paths, hthdrs=hthdrs )
         return d
 
@@ -447,7 +447,7 @@ class Client( object ) :
         q = {}
         isinstance(bytes, (int,long)) and q.setdefault('bytes', bytes)
         isinstance(offset, (int,long)) and q.setdefault('offset', offset)
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
         return d.getvalue() if s == OK else None
 
@@ -478,7 +478,7 @@ class Client( object ) :
         value = kwargs.get( 'value', None )
         delete = kwargs.get( 'delete', None )
         conn, paths = self.conn, (['_config'] + paths)
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         if delete == True :
             s, h, d = _config( conn, paths, hthdrs=hthdrs, delete=delete )
         elif value != None :
@@ -504,18 +504,21 @@ class Client( object ) :
         authentication, so preserve the following cookie for subsequent
         request.
         """
+        if self.cookie : 
+            log.warn( 'Client already authenticated (%s)' % self.cookie )
+            return (None, None, None)
         conn, paths = self.conn, ['_session']
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
-        sc = SimpleCookie()
+        self.cookie = sc = SimpleCookie()
         sc.load( h['set-cookie'] )
-        conn.savecookie( self.hthdrs, sc )
+        self.savecookie( self.hthdrs, sc )
         return s, h, d if s == OK and d['ok'] else (None, None, None)
 
     def logout( self, hthdrs={} ) :
         """Logout from authenticated DB session"""
         conn, paths = self.conn, ['_session']
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _session( conn, paths, logout=True, hthdrs=hthdrs )
 
     def authsession( self, hthdrs={} ) :
@@ -523,7 +526,7 @@ class Client( object ) :
         that browser-session is not handled by the client."""
         if self._authsession == None :
             conn, paths = self.conn, ['_session']
-            hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+            hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
             s, h, d = _session( conn, paths, hthdrs=hthdrs )
             self._authsession = AuthSession(d)
         return self._authsession
@@ -553,7 +556,7 @@ class Client( object ) :
     def delete( self, db, hthdrs={} ) :
         """Delete the database db."""
         from   database     import Database
-        name = db.dbname if isinstance( db, Database ) else db
+        name = db if isinstance( db, basestring ) else db.dbname
         return Database.delete( self, name, hthdrs=hthdrs )
 
     def has_database( self, name, hthdrs={} ) :

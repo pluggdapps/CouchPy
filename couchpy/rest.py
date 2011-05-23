@@ -10,16 +10,17 @@
 #   2. Instead of using python based json, it would be great to use c-based
 #      implementation
 
-import urllib, json, logging, sys
-from   copy     import deepcopy
-from   urlparse import urlsplit, urlunsplit
-from   StringIO import StringIO
+import urllib, json, logging, sys, time
+from   copy             import deepcopy
+from   urlparse         import urlsplit, urlunsplit
+from   StringIO         import StringIO
 
+from   couchpy.mixins   import Helpers
 import httpc
 
 log = logging.getLogger( __name__ )
 
-class ReSTful(object) :
+class ReSTful( object, Helpers ) :
     """
     Class definition along with the HttpSession to interface a HTTP server
     using ReST-ful (Representational State Transfer) design. If http-header
@@ -148,32 +149,13 @@ class ReSTful(object) :
         paths = paths.split('/') if isinstance( paths, basestring ) else paths
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
-        log.info( "%6s %s" % (method, url) )
+        st = time.time()    # Debog code
         resp = self.htsession.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
                )
+        log.info( "%6s %s %s" % (method, (time.time()-st), url) )
         return resp
-
-
-    #---- Helper functions as Classmethods
-
-    @classmethod
-    def savecookie( cls, hthdrs, simplecookie ) :
-        cookies = filter(
-                  None,
-                  [ hthdrs.get( 'Set-Cookie', hthdrs.get( 'set-cookie', '' )) ]
-                )
-        for name, morsel in simplecookie.items() :
-            cookies.append( '%s=%s' %  (name, morsel.value) )
-        hthdrs['Cookie'] = ', '.join(cookies)
-        return hthdrs
-
-    @classmethod
-    def mixinhdrs( cls, *hthdrs ) :
-        newhthdrs = {}
-        [ newhthdrs.update(h) for h in hthdrs ]
-        return newhthdrs
 
 
 def urljoin( base, *path, **kwargs ) :

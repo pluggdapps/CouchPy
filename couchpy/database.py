@@ -18,11 +18,8 @@ from   couchpy.doc        import Document, LocalDocument
 from   couchpy.designdoc  import DesignDocument
 from   couchpy.attachment import Attachment
 from   couchpy.query      import Query
+from   couchpy.mixins     import Helpers
 
-# GOTCHA :
-#   1. The 'skip' option should only be used with small values, as skipping a
-#      large range of documents this way is inefficient
-#
 # TODO :
 #   1. _changes, 'longpoll' and 'continuous' modes are not yet supported.
 #   3. _missing_revs, _revs_diff, _security
@@ -217,7 +214,7 @@ def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
 
 
 
-class Database( object ) :
+class Database( object, Helpers ) :
 
     def __init__( self, client, dbname, hthdrs={}, **kwargs ) :
         """Instantiate the database object corresponding to ``dbname`` in
@@ -234,14 +231,13 @@ class Database( object ) :
             object. Aside from these headers, if a method supports `hthdrs`
             key-word argument, it will be used for a single request.
         """
-        self.client = client
+        self.client, self.conn = client, client.conn
         self.dbname = Database.validate_dbname( dbname )
         self.debug = kwargs.pop( 'debug', client.debug )
 
-        self.conn = client.conn
         self.paths = client.paths + [ dbname ]
         self.info = {}
-        self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
+        self.hthdrs = self.mixinhdrs( self.client.hthdrs, hthdrs )
 
     def __call__( self ) :
         """Return information about this database, refer to ``GET /db`` API
@@ -342,7 +338,7 @@ class Database( object ) :
             No
         """
         conn, paths = self.conn, ( self.paths + ['_changes'] )
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _changes( conn, paths, hthdrs=hthdrs, **query )
         return d
 
@@ -375,7 +371,7 @@ class Database( object ) :
                       ) if designdoc == None else ( 
                         self.conn, (self.paths + ['_compact',designdoc])
                       )
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _compact( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -385,7 +381,7 @@ class Database( object ) :
         Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_view_cleanup'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _view_cleanup( conn, paths, hthdrs=hthdrs )
         return None
 
@@ -397,7 +393,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_ensure_full_commit'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _ensure_full_commit( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -420,7 +416,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths, h = self.conn, (self.paths + ['_bulk_docs']), hthdrs
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths=paths, hthdrs=h )
         return d
 
@@ -435,7 +431,7 @@ class Database( object ) :
         Admin-prev, Yes
         """
         conn, paths = self.conn, (self.paths + ['_temp_view'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
         return d
 
@@ -471,7 +467,7 @@ class Database( object ) :
             _id = doc._id if isinstance(doc, Document) else doc
             revs = [ doc._rev ] if revs == None else revs
             body = { _id : revs }
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
@@ -525,12 +521,15 @@ class Database( object ) :
         Alternately, query parameters can be passes as a dictionary or Query
         object to key-word argument ``_q``.
 
+        The 'skip' option should only be used with small values, as skipping a
+        large range of documents this way is inefficient
+
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_all_docs'])
         q = _q if isinstance(_q, Query) else Query( params=dict(_q.items()) )
         q.update( query )
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
         return d
 
@@ -556,7 +555,7 @@ class Database( object ) :
         Return the current security object
         """
         conn, paths = self.conn, (self.paths + ['_security'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _security( conn, paths, security=security, hthdrs=hthdrs )
         return d
 
@@ -565,7 +564,7 @@ class Database( object ) :
         To set revs_limit, pass the value as key-word argument ``limit``
         """
         conn, paths = self.conn, (self.paths + ['_revs_limit'])
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
 
@@ -590,7 +589,7 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, q, f = self.conn, query, filepaths
-        h = conn.mixinhdrs( self.hthdrs, hthdrs )
+        h = self.mixinhdrs( self.hthdrs, hthdrs )
         r = None
         if docs != None and doc_cls != None :
             r = [ doc_cls.create(self, doc, hthdrs=h, fetch=fetch, **q)
@@ -647,7 +646,7 @@ class Database( object ) :
             else :
                 cls.delete( self, docs_, hthdrs=h, rev=rev )
 
-        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
+        h = self.mixinhdrs( self.hthdrs, hthdrs )
         if docs != None : delete( Document, docs, hthdrs=h, rev=rev )
         elif localdocs != None : delete(LocalDocument, docs, hthdrs=h, rev=rev)
         elif designdocs != None : delete(DesignDocument, docs, hthdrs=h, rev=rev)
@@ -663,7 +662,7 @@ class Database( object ) :
         """
         q = Query( startkey="_design/", endkey="_design0" )
         q.update( **query )
-        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
         return map( lambda x : x['id'], d['rows'] )
 
@@ -676,7 +675,7 @@ class Database( object ) :
 
         Admin-prev, No
         """
-        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
+        h = self.mixinhdrs( self.hthdrs, hthdrs )
         if docid.startswith( '_local' ) :
             d = LocalDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
                                     rev=rev )
@@ -687,6 +686,36 @@ class Database( object ) :
             d = Document.copy( self, docid, toid, asrev=asrev, hthdrs=h,
                                rev=rev )
         return d
+
+    def deleteupdate( self, docs, dbdocs, merge=None ) :
+        """Some document in documents `docs` can be fresh to database, while
+        some other might by pointing to exising ones. For existing documents,
+        read the database version and delete that version. Update the document
+        with the new one create a fresh copy of the document."""
+        # Delete database documents
+        deldocs = []
+        newdocs = []
+        for key, doc in docs.items() :
+            if key not in dbdocs :
+                newdocs.append( doc )
+                continue
+            d = dbdocs[key]
+            deldocs.append({
+                '_id':d.pop('_id'), '_rev':d.pop('_rev'), '_deleted':True
+            })
+            d.update(doc)
+            newdocs.append(d)
+        d = self.bulkdocs( docs=deldocs )
+        conflicts = [ r for r in d if r.get('error','') == 'conflict' ]
+        if conflicts :
+            log.error( 'Conflicts while delete db versions %s' % conflicts )
+        # New documents
+        d = self.bulkdocs( docs=newdocs )
+        conflicts = [ r for r in d if r.get('error','') == 'conflict' ]
+        if conflicts :
+            log.error( 'Conflicts while updating merged versions %s' % conflicts )
+        return d
+
 
     _committed_update_seq = lambda self : self()['committed_update_seq']
     _compact_running      = lambda self : self()['compact_running']
@@ -724,7 +753,7 @@ class Database( object ) :
             No
         """
         conn, paths = client.conn, (client.paths + [ dbname ])
-        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
+        hthdrs = client.mixinhdrs( client.hthdrs, hthdrs )
         s, h, d = _createdb( conn, paths, hthdrs=hthdrs )
         if d != None :
             return Database( client, dbname, hthdrs=hthdrs )
@@ -742,9 +771,10 @@ class Database( object ) :
             No
         """
         conn, paths = client.conn, (client.paths + [dbname])
-        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
+        hthdrs = client.mixinhdrs( client.hthdrs, hthdrs )
         s, h, d = _deletedb( conn, paths, hthdrs=hthdrs )
         return d
+
 
     # TODO : Collect all special db names ...
     SPECIAL_DB_NAMES = set([ '_users', ])
