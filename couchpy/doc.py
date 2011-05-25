@@ -63,13 +63,13 @@ from   copy               import deepcopy
 from   StringIO           import StringIO
 from   mimetypes          import guess_type
 
+import couchpy.rest       as rest
 from   couchpy.httperror  import *
 from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED, \
                                  ACCEPTED
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
-import couchpy.rest       as rest
-from   couchpy.mixins     import Helpers
+from   couchpy.mixins     import MixinDoc
 
 # TODO :
 #   1. Batch mode POST / PUT should have a verification system built into it.
@@ -198,7 +198,7 @@ def _copydoc( conn, paths=[], hthdrs={}, **query ) :
         return (None, None, None)
 
 
-class Document( object, Helpers ) :
+class Document( MixinDoc, object ) :
 
     def __init__( self, db, doc, fetch=True, hthdrs={}, **query ) :
         """Instantiate python representation of a CouchDB document, specified
@@ -233,7 +233,7 @@ class Document( object, Helpers ) :
         self.revs_info = None   # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = self.mixinhdrs( self.db.hthdrs, hthdrs )
+        self.hthdrs = self.conn.mixinhdrs( self.db.hthdrs, hthdrs )
 
     def __getattr__( self, name ) :
         """Typically derived class should implement properties that are mapped
@@ -309,7 +309,7 @@ class Document( object, Helpers ) :
         revs = query.get( 'revs', None )
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
-        h = self.mixinhdrs( self.hthdrs, hthdrs )
+        h = conn.mixinhdrs( self.hthdrs, hthdrs )
 
         if rev != None and rev != self.doc['_rev'] :
             return self.__class__( self.db, self.doc, hthdrs=h, rev=rev )
@@ -393,7 +393,7 @@ class Document( object, Helpers ) :
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
         self.doc.update( using )
         conn, paths = self.conn, self.paths
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatedoc( conn, self.doc, paths, hthdrs=hthdrs, **query )
         self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
@@ -419,7 +419,7 @@ class Document( object, Helpers ) :
         }
         d.update( doc )
         conn, paths = self.conn, self.paths
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatedoc( conn, d, paths, hthdrs=hthdrs, **query )
         self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
@@ -461,7 +461,7 @@ class Document( object, Helpers ) :
         """
         filename = basename( filepath )
         data = open( filepath ).read()
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.putattachment(
                 self.db, self, filepath, data, content_type=content_type,
                 hthdrs=hthdrs, **query
@@ -479,7 +479,7 @@ class Document( object, Helpers ) :
         """
         filename = attach.filename \
                    if isinstance(attach, Attachment) else attach
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.delattachment(
                 self.db, self, filename, hthdrs=hthdrs, **query
             )
@@ -512,7 +512,7 @@ class Document( object, Helpers ) :
         """Probe whether the document is available"""
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _headdoc( db.conn, paths, hthdrs=hthdrs, **query )
         return s, h, d
 
@@ -550,7 +550,7 @@ class Document( object, Helpers ) :
             attachs_ = doc.get('_attachments', {})
             attachs_.update( attachs )
             doc['_attachments'] = attachs_
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _createdoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
@@ -577,7 +577,7 @@ class Document( object, Helpers ) :
         rev = (query if isinstance(doc, basestring) else doc).get('rev', None)
         rev = doc()['_rev'] if rev == None else rev
         q = { 'rev' : rev }
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
@@ -596,35 +596,12 @@ class Document( object, Helpers ) :
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev)
         hthdrs = { 'Destination' : dest }
         paths = db.paths + [ id_ ]
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             return Document( db, d['id'], hthdrs=hthdrs, rev=d['rev'] )
         else :
             return None
-
-    @classmethod
-    def deleteupdate( cls, db, doc, withdoc, fetch=False ) :
-        """If `doc` is Document object, and merge the document with `withdoc`.
-        Delete the original document in the database and create a new one
-        using the merged doc.
-
-        If `doc` is `_id`, or dictionary, use its _id to fetch the document
-        from database. If the document is not present in the database, then
-        simply create the document using `withdoc`.
-        """
-        id_ = doc if isinstance( doc, basestring ) else doc['_id']
-        try :
-            doc = Document( db, id_, fetch=True )
-        except ResourceNotFound :
-            newdoc = cls.create( db, newdoc, fetch=fetch )
-        else :
-            doc.pop( '_id', None ); doc.pop( '_rev', None )
-            newdoc = deepcopy( doc.doc )
-            newdoc.update( withdoc )
-            cls.delete( db, doc )
-            newdoc = cls.create( db, newdoc, fetch=fetch )
-        return newdoc
 
 
     SPECIAL_DOC_NAMES = [
@@ -674,7 +651,7 @@ class LocalDocument( Document ) :
         self.revs_info = None       # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = self.mixinhdrs( db.hthdrs, hthdrs )
+        self.hthdrs = self.conn.mixinhdrs( db.hthdrs, hthdrs )
 
     @classmethod
     def create( cls, db, doc, attachfiles=[], hthdrs={}, fetch=True, **query ) :
@@ -693,7 +670,7 @@ class LocalDocument( Document ) :
             attachs_ = doc.get('_attachments', {})
             attachs_.update( attachs )
             doc['_attachments'] = attachs_
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _updatedoc( db.conn, doc, paths, hthdrs, **query )
         if d == None : return None
         doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
@@ -713,7 +690,7 @@ class LocalDocument( Document ) :
         rev = (query if isinstance(doc, basestring) else doc).get('_rev', None)
         rev = doc()['_rev'] if rev == None else rev
         q = { 'rev' : rev }
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletedoc( db.conn, paths, hthdrs, **q )
         return d
 
@@ -729,7 +706,7 @@ class LocalDocument( Document ) :
         hthdrs = { 'Destination' : dest }
         id_ = self.id2name(id_)
         paths = db.paths + [ '_local', id_ ]
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             id_ = self.id2name(d['id'])

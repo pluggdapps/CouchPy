@@ -6,7 +6,6 @@ from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED
 from   couchpy            import CouchPyError
 from   couchpy.attachment import Attachment
 import couchpy.rest       as rest
-from   couchpy.mixins     import Helpers
 
 # TODO :
 #   1. List, Update and Rewirte APIs are still being defined.
@@ -130,7 +129,7 @@ def _showsgn( conn, paths=[], doc=None, hthdrs={}, **query ) :
         return (None, None, None)
 
 
-class DesignDocument( object, Helpers ) :
+class DesignDocument( object ) :
 
     def __init__( self, db, doc, fetch=True, hthdrs={}, **query ) :
         """Read the design-document specified by ``doc`` which can be either a
@@ -166,7 +165,7 @@ class DesignDocument( object, Helpers ) :
         self.revs_info = None   # Cached object
         self.client = db.client
         self.debug = db.debug
-        self.hthdrs = self.mixinhdrs( self.db.hthdrs, hthdrs )
+        self.hthdrs = self.conn.mixinhdrs( self.db.hthdrs, hthdrs )
 
     def __getitem__(self, key) :
         """Fetch a value corresponding to the ``key`` stored in this
@@ -233,7 +232,7 @@ class DesignDocument( object, Helpers ) :
         revs = query.get( 'revs', None )
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
 
         if rev != None and rev != self.doc['_rev'] :
             return self.__class__( self.db, self.doc, hthdrs=hthdrs, rev=rev )
@@ -291,7 +290,7 @@ class DesignDocument( object, Helpers ) :
         [ using.pop( k, None ) for k in ['_id', '_rev'] ]
         self.doc.update( using )
         conn, paths = self.conn, self.paths
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _updatesgn( conn, self.doc, paths, hthdrs=hthdrs )
         self.doc.update({ '_rev' : d['rev'] }) if d and 'rev' in d else None
         return None
@@ -333,7 +332,7 @@ class DesignDocument( object, Helpers ) :
         """
         data = open( filepath ).read()
         filename = basename( filepath )
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.putattachment(
                 self.db, self, filepath, data, content_type=content_type,
                 hthdrs=hthdrs, **query
@@ -351,7 +350,7 @@ class DesignDocument( object, Helpers ) :
         """
         filename = attach.filename \
                    if isinstance(attach, Attachment) else attach
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
         d = Attachment.delattachment(
                 self.db, self, filename, hthdrs=hthdrs, **query
             )
@@ -383,7 +382,7 @@ class DesignDocument( object, Helpers ) :
         Admin-prev, No
         """
         conn, paths = self.conn, self.paths
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _infosgn( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -419,7 +418,7 @@ class DesignDocument( object, Helpers ) :
         if not cls.validate_docid(id_) : 
             return None
         paths = db.paths + [ '_design', id_ ]
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _updatesgn( db.conn, doc, paths, hthdrs )
         if d == None : return None
         doc.update({ '_id' : d['id'] }) if d and 'id' in d else None
@@ -445,7 +444,7 @@ class DesignDocument( object, Helpers ) :
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         id_ = cls.id2name(id_)
         paths = db.paths + [ '_design', id_ ]
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _deletesgn( db.conn, paths, hthdrs, **query )
         return d
 
@@ -465,7 +464,7 @@ class DesignDocument( object, Helpers ) :
         paths = db.paths + [ '_design', id_ ]
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev),
         hthdrs = { 'Destination' : dest }
-        hthdrs = db.mixinhdrs( db.hthdrs, hthdrs )
+        hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )
         s, h, d = _copysgn( db.conn, paths, hthdrs=hthdrs, **query )
         if 'id' in d and 'rev' in d :
             return DesignDocument( db, d['id'], hthdrs=hthdrs, rev=d['rev'] )

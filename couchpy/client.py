@@ -68,7 +68,6 @@ import rest
 from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
 from   couchpy          import AuthSession
-from   couchpy.mixins   import Helpers
 
 # TODO :
 #   1. Fix `replicate()` method.
@@ -210,7 +209,7 @@ def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
     else :
         return (None, None, None)
 
-class Client( object, Helpers ) :
+class Client( object ) :
 
     DEFAULTUSER = 'anonymous'
 
@@ -251,10 +250,10 @@ class Client( object, Helpers ) :
             hthdrs.update({ 'X-Couch-Full-Commit' : str(full_commit).lower() })
 
         self.conn = rest.ReSTful( self.url, htsession, headers=hthdrs )
-        self.hthdrs = self.mixinhdrs( hthdrs )
+        self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
         # Loaded the saved cookie so that 
-        cookie != None and self.savecookie( self.hthdrs, cookie )
+        cookie != None and conn.savecookie( self.hthdrs, cookie )
         self._authsession = None
 
     #---- Pythonification of instance methods. They are supposed to be
@@ -339,7 +338,7 @@ class Client( object, Helpers ) :
         Admin-Prev, No
         """
         conn, paths = self.conn, (self.paths + [ '_active_tasks' ])
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _active_tasks( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -351,7 +350,7 @@ class Client( object, Helpers ) :
         """
         from   database     import Database
         conn, paths, debug = self.conn, (self.paths + [ '_all_dbs' ]), self.debug
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
         return [ Database( self, n, debug=debug) for n in d ] if d else []
 
@@ -363,7 +362,7 @@ class Client( object, Helpers ) :
         Admin-Prev, Yes
         """
         conn, paths = self.conn, (self.paths + [ '_restart' ])
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _restart( conn, paths, hthdrs=hthdrs )
         return d['ok'] if (s==OK) else False
 
@@ -381,7 +380,7 @@ class Client( object, Helpers ) :
         Admin-Prev, No
         """
         conn, paths = self.conn, (['_stats'] + list(paths))
-        hthdrs = self.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
+        hthdrs = conn.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
         s, h, d = _stats( conn, paths, hthdrs=hthdrs )
         return d
 
@@ -391,7 +390,7 @@ class Client( object, Helpers ) :
         """
         q =  { 'count' : count } if isinstance(count, (int,long)) else {}
         conn, paths = self.conn, (self.paths + ['_uuids'])
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _uuids( conn, paths, hthdrs=hthdrs, **q )
         return d['uuids'] if s == OK else None
 
@@ -421,8 +420,8 @@ class Client( object, Helpers ) :
         ``proxy``,
             Address of a proxy server through which replication should occur
         """
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
         conn, paths = self.conn, (self.paths + ['_replicate'])
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         # request body
         body = {'source': source, 'target': target}
         body.update(options)
@@ -447,7 +446,7 @@ class Client( object, Helpers ) :
         q = {}
         isinstance(bytes, (int,long)) and q.setdefault('bytes', bytes)
         isinstance(offset, (int,long)) and q.setdefault('offset', offset)
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
         return d.getvalue() if s == OK else None
 
@@ -478,7 +477,7 @@ class Client( object, Helpers ) :
         value = kwargs.get( 'value', None )
         delete = kwargs.get( 'delete', None )
         conn, paths = self.conn, (['_config'] + paths)
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         if delete == True :
             s, h, d = _config( conn, paths, hthdrs=hthdrs, delete=delete )
         elif value != None :
@@ -508,17 +507,17 @@ class Client( object, Helpers ) :
             log.warn( 'Client already authenticated (%s)' % self.cookie )
             return (None, None, None)
         conn, paths = self.conn, ['_session']
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
         self.cookie = sc = SimpleCookie()
         sc.load( h['set-cookie'] )
-        self.savecookie( self.hthdrs, sc )
+        conn.savecookie( self.hthdrs, sc )
         return s, h, d if s == OK and d['ok'] else (None, None, None)
 
     def logout( self, hthdrs={} ) :
         """Logout from authenticated DB session"""
         conn, paths = self.conn, ['_session']
-        hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _session( conn, paths, logout=True, hthdrs=hthdrs )
 
     def authsession( self, hthdrs={} ) :
@@ -526,7 +525,7 @@ class Client( object, Helpers ) :
         that browser-session is not handled by the client."""
         if self._authsession == None :
             conn, paths = self.conn, ['_session']
-            hthdrs = self.mixinhdrs( self.hthdrs, hthdrs )
+            hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
             s, h, d = _session( conn, paths, hthdrs=hthdrs )
             self._authsession = AuthSession(d)
         return self._authsession

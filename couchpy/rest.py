@@ -20,7 +20,7 @@ import httpc
 
 log = logging.getLogger( __name__ )
 
-class ReSTful( object, Helpers ) :
+class ReSTful( Helpers, object ) :
     """
     Class definition along with the HttpSession to interface a HTTP server
     using ReST-ful (Representational State Transfer) design. If http-header
