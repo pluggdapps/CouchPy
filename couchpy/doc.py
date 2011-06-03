@@ -310,14 +310,15 @@ class Document( MixinDoc, object ) :
         revs_info = query.get( 'revs_info', None )
         conn, paths = self.conn, self.paths
         h = conn.mixinhdrs( self.hthdrs, hthdrs )
+        _rev = self.doc['rev']
 
-        if rev != None and rev != self.doc['_rev'] :
+        if rev != None and rev != _rev :
             return self.__class__( self.db, self.doc, hthdrs=h, rev=rev )
         elif revs == True :
             q = { 'revs' : 'true' }
             if self.revs and fetch == False:
                 s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
-                if s == OK and h_['Etag'] == self.doc['_rev'] :
+                if s == OK and h_['Etag'] == rest.data2json(_rev) :
                     return self.revs
             s, h_, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs = d
@@ -326,19 +327,19 @@ class Document( MixinDoc, object ) :
             q = { 'revs_info' : 'true' }
             if self.revs_info and fetch == False :
                 s, h_, d = _headdoc( conn, paths, hthdrs=h, **q )
-                if s == OK and h_['Etag'] == self.doc['_rev'] :
+                if s == OK and h_['Etag'] == rest.data2json(_rev) :
                     return self.revs_info
             s, h_, d = _readdoc( conn, paths, hthdrs=h, **q )
             self.revs_info = d
             return self.revs_info
-        elif self.doc['_rev'] == None :
+        elif _rev == None :
             s, h_, d = _readdoc( conn, paths, hthdrs=h )
             self.doc = d
             return self
         else :
             if self.doc and fetch == False :
                 s, h_, d = _headdoc( conn, paths, hthdrs=h )
-                if s == OK and h_['Etag'] == self.doc['_rev'] :
+                if s == OK and h_['Etag'] == rest.data2json(_rev) :
                     return self
             s, h_, d = _readdoc( conn, paths, hthdrs=h )
             self.doc = d
@@ -574,7 +575,7 @@ class Document( MixinDoc, object ) :
         """
         id_ = doc if isinstance(doc, basestring) else doc['_id']
         paths = db.paths + [ id_ ]
-        rev = (query if isinstance(doc, basestring) else doc).get('rev', None)
+        rev = (query if isinstance(doc, basestring) else doc).get('_rev', None)
         rev = doc()['_rev'] if rev == None else rev
         q = { 'rev' : rev }
         hthdrs = db.conn.mixinhdrs( db.hthdrs, hthdrs )

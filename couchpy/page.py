@@ -103,11 +103,7 @@ class Paginate( object ) :
         if _key or _id :
             if _key : q['startkey'] = _key
             if _id and self.usedocid : q['startkey_docid'] = _id
-            return q
-        elif self.usedocid :
-            return q.get( 'startkey', None ), q.get( 'startkey_docid', None )
-        else :
-            return q.get( 'startkey', None ), None
+        return q
 
     def _checkmarker( self, row, marker ) :
         if row['key'] != marker['startkey'] : return False

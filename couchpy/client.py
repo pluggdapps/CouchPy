@@ -253,7 +253,7 @@ class Client( object ) :
         self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
         # Loaded the saved cookie so that 
-        cookie != None and conn.savecookie( self.hthdrs, cookie )
+        cookie != None and self.conn.savecookie( self.hthdrs, cookie )
         self._authsession = None
 
     #---- Pythonification of instance methods. They are supposed to be

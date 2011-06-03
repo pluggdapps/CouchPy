@@ -623,33 +623,33 @@ class Database( MixinDB, object ) :
         return r
 
     def deletedoc( self, docs=None, localdocs=None, designdocs=None,
-                   rev=None, hthdrs={} ) :
+                   _rev=None, hthdrs={} ) :
         """Delete one or more documents from the database and all the
         attachments contained in the document(s). Documents can be of,
         Normal documents, Local documents, Design documents.
 
-        When deleting single document, key-word argument `rev` (current revision
+        When deleting single document, key-word argument `_rev` (current revision
         of the document) should be specified.
         When deleting multiple documents, `docs` must be a list of tuples,
         [ (docid, document-revision), ... ]
 
         Admin-Prev, No
         """
-        def delete( cls, docs_, hthdrs={}, rev=None ) :
+        def delete( cls, docs_, hthdrs={}, _rev=None ) :
             if isinstance( docs_, (list,tuple) ) :
                 for doc in docs_ :
                     if isinstance(doc, cls) :
-                        cls.delete( self, doc, hthdrs=hthdrs, rev=rev )
+                        cls.delete( self, doc, hthdrs=hthdrs, _rev=_rev )
                     else :
-                        doc, rev = doc
-                        cls.delete( self, doc, hthdrs=hthdrs, rev=rev )
+                        doc, _rev = doc
+                        cls.delete( self, doc, hthdrs=hthdrs, _rev=_rev )
             else :
-                cls.delete( self, docs_, hthdrs=h, rev=rev )
+                cls.delete( self, docs_, hthdrs=h, _rev=_rev )
 
         h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
-        if docs != None : delete( Document, docs, hthdrs=h, rev=rev )
-        elif localdocs != None : delete(LocalDocument, docs, hthdrs=h, rev=rev)
-        elif designdocs != None : delete(DesignDocument, docs, hthdrs=h, rev=rev)
+        if docs!=None : delete( Document, docs, hthdrs=h, _rev=_rev )
+        elif localdocs!=None : delete(LocalDocument, docs, hthdrs=h, _rev=_rev)
+        elif designdocs!=None : delete(DesignDocument, docs, hthdrs=h, _rev=_rev)
         return None
 
     def designdocs( self, keys=None, hthdrs={}, **query ) :
