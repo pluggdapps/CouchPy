@@ -8,12 +8,12 @@ Create a client object,
 >>> c()
 { "couchdb" : "Welcome", "version" : "<version>" }
 
-New databases can be created using the `create` method,
+New databases can be created using the `put` method,
 
->>> db = c.create('dbname_first') # Create
+>>> db = c.put('dbname_first')  # put
 >>> db
 <Database 'dbname_first'>
->>> c.create('dbname_second')     # Create another database
+>>> c.put('dbname_second')      # put another database
 
 Other operations :
 
@@ -47,7 +47,7 @@ Replicate source database to a target database,
 
 Database operations
 
->>> c.create( 'blog' )                  # Create database
+>>> c.put('blog')                       # Create database
 <Databse 'blog'>
 >>> c.database( 'blog' )                # Get an instance of Database
 <Databse 'blog'>
@@ -77,12 +77,12 @@ from   couchpy          import AuthSession
 #   5. Test cases for addadmin(), deladmin(), admins().
 
 log = logging.getLogger( __name__ )
-__VERSION__ = '0.1'
+__version__ = '0.1'
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
 
-hdr_acceptjs = { 'Accept' : 'application/json' }
+hdr_acceptjs  = { 'Accept' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
-hdr_ctypejs = { 'Content-Type' : 'application/json' }
+hdr_ctypejs   = { 'Content-Type' : 'application/json' }
 
 def _headsrv( conn, paths=[], hthdrs={} ) :
     """HEAD /"""
@@ -91,6 +91,7 @@ def _headsrv( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.warn( 'HEAD request to / failed' )
         return (None, None, None)
 
 def _getsrv( conn, paths=[], hthdrs={} ) :
@@ -100,6 +101,7 @@ def _getsrv( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.warn( 'GET request to / failed' )
         return (None, None, None)
 
 def _active_tasks( conn, paths=[], hthdrs={} ) :
@@ -109,6 +111,7 @@ def _active_tasks( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'GET request to /_active_tasks failed' )
         return (None, None, None)
 
 def _all_dbs( conn, paths=[], hthdrs={} ) :
@@ -118,6 +121,7 @@ def _all_dbs( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'GET request to /_all_dbs failed' )
         return (None, None, None)
 
 def _restart( conn, paths=[], hthdrs={} ) :
@@ -127,6 +131,7 @@ def _restart( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /_restart failed' )
         return (None, None, None)
 
 def _stats( conn, paths=[], hthdrs={} ) :
@@ -136,10 +141,11 @@ def _stats( conn, paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /_stats failed' )
         return (None, None, None)
 
 def _uuids( conn, paths=[], hthdrs={}, **query ) :
-    """POST /_stats/
+    """POST /_uuids
     query object `q`,
         count=<num>
     """
@@ -148,6 +154,7 @@ def _uuids( conn, paths=[], hthdrs={}, **query ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /_uuids failed' )
         return (None, None, None)
 
 def _replicate( conn, body, paths=[], hthdrs={} ) :
@@ -158,6 +165,7 @@ def _replicate( conn, body, paths=[], hthdrs={} ) :
     if s == ACCEPTED and d['ok'] :
         return s, h, d
     else :
+        log.error( 'POST request to /_replicate failed' )
         return (None, None, None)
 
 def _log( conn, paths=[], hthdrs={}, **query ) :
@@ -167,6 +175,7 @@ def _log( conn, paths=[], hthdrs={}, **query ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /_log failed' )
         return (None, None, None)
 
 def _config( conn, paths=[], hthdrs={}, **kwargs ) :
@@ -180,14 +189,18 @@ def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if 'value' in kwargs :      # PUT
         body = rest.data2json( kwargs['value'] )
+        method = 'PUT'
         s, h, d = conn.put( paths, hthdrs, body )
     elif 'delete' in kwargs :
+        method = 'DELETE'
         s, h, d = conn.delete( paths, hthdrs, None )
     else :
+        method = 'GET'
         s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
     else :
+        log.error( '%s request to (%s) failed' % (method, paths) )
         return (None, None, None)
 
 def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
@@ -197,46 +210,52 @@ def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
     DELETE /_session
     """
     if logout == True :
+        method = 'DELETE'
         s, h, d = conn.delete( paths, hthdrs, None )
     elif login :
+        method = 'POST'
         hthdrs = conn.mixinhdrs( hthdrs, hdr_ctypeform )
         body = 'name=%s&password=%s' % login
         s, h, d = conn.post( paths, hthdrs, body )
     else :
+        method = 'GET'
         s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
     else :
+        log.error( '%s request to /_session failed' % (method, paths) )
         return (None, None, None)
 
+
 class Client( object ) :
+    """Initialize a client object, with the base `url` and optional
+    key-word arguments.
+
+    ``url``,
+        URI to the server, EG, ``http://localhost:5984/``
+
+    ``full_commit``,
+        Boolean, turn on the X-Couch-Full-Commit header
+    ``hthdrs``,
+        Dictionary of HTTP request headers, remembered at the instance
+        level.  Aside from these headers, if a method supports `hthdrs` key-word
+        argument, it will be used (along with instance-level headers) for a
+        single call.
+    ``session``,
+        :class:`httpc.HttpSession` instance or None for a default session
+    ``debug``, 
+        for enhanced logging
+    ``cookie``,
+        `SimpleCookie` cookie object, that can be used to populate headers,
+        especially the authentication cookie
+    ``defaultuser``,
+        Default-user to be returned when user session is not
+        authenticated. Used by sessionuser() method.
+    """
 
     DEFAULTUSER = 'anonymous'
 
     def __init__( self, url=DEFAULT_URL, **kwargs) :
-        """Initialize a client object, with the base `url` and optional
-        key-word arguments.
-
-        ``url``,
-            URI to the server, EG, ``http://localhost:5984/``
-
-        ``full_commit``,
-            Boolean, turn on the X-Couch-Full-Commit header
-        ``hthdrs``,
-            Dictionary of HTTP request headers, remembered at the instance
-            level.  Aside from these headers, if a method supports `hthdrs` key-word
-            argument, it will be used (along with instance-level headers) for a
-            single call.
-        ``session``,
-            :class:`httpc.HttpSession` instance or None for a default session
-        ``debug``, 
-            for enhanced logging
-        ``cookie``,
-            `SimpleCookie` cookie object, that can be used to populate headers
-        ``defaultuser``,
-            Default-user to be returned when user session is not
-            authenticated. Used by sessionuser() method.
-        """
         self.url = url
 
         self.full_commit = full_commit = kwargs.get( 'full_commit', None )
@@ -252,12 +271,13 @@ class Client( object ) :
         self.conn = rest.ReSTful( self.url, htsession, headers=hthdrs )
         self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
+        self.available = None
         # Loaded the saved cookie so that 
         cookie != None and self.conn.savecookie( self.hthdrs, cookie )
         self._authsession = None
 
     #---- Pythonification of instance methods. They are supposed to be
-    # wrappers around the actual API.
+    #---- wrappers around the actual API.
 
     def __contains__( self, name ) :
         """Return True or False based on whether the server contains
@@ -278,10 +298,14 @@ class Client( object ) :
         return len(self.all_dbs())
 
     def __nonzero__( self ) :
-        """Return whether the server is available."""
-        conn, paths = self.conn, self.paths
-        s, _, _ = _headsrv( conn, paths, hthdrs=self.hthdrs )
-        return True if s == OK else False
+        """Return whether the server is available. This is essentially a one
+        time check to know whether the database instance pointed by `url` is
+        available. Subsequent checks will simply return the remembered status.
+        To make a fresh request for server availability use, `ispresent()`
+        method."""
+        if self.available == None :
+            self.available = self.ispresent()
+        return self.available
 
     def __repr__( self ) :
         return '<%s %r>' % (type(self).__name__, self.url)
@@ -316,9 +340,18 @@ class Client( object ) :
 
     #---- Database Management System ----
 
-    def version( self ) :
+    def version( self ):
         """Version string from CouchDB server."""
         return self().get( 'version', None )
+
+    def ispresent( self ):
+        """Do a fresh check for database server's (pointed by `url`)
+        availability.
+        """
+        conn, paths = self.conn, self.paths
+        s, _, _ = _headsrv( conn, paths, hthdrs=self.hthdrs )
+        self.available = s == OK
+        return self.available
 
     def active_tasks( self, hthdrs={} ) :
         """Obtain a list of active tasks. The result is a JSON converted array of
@@ -352,7 +385,34 @@ class Client( object ) :
         conn, paths, debug = self.conn, (self.paths + [ '_all_dbs' ]), self.debug
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
-        return [ Database( self, n, debug=debug) for n in d ] if d else []
+        return d if d else []
+
+    def log( self, bytes=None, offset=None, hthdrs={} ) :
+        """Get CouchDB log, equivalent to accessing the local log file of
+        the corresponding CouchDB instance. When you request the log, the
+        response is returned as plain (UTF-8) text, with an HTTP Content-type
+        header as text/plain. Returns a stream of text bytes.
+
+        ``bytes``,
+            Bytes to be returned.
+        ``offset``,
+            Offset in bytes where the log tail should be started.
+
+        Admin-Prev, Yes
+        """
+        conn, paths = self.conn, (self.paths + ['_log'])
+        q = {}
+        isinstance(bytes, (int,long)) and q.setdefault('bytes', bytes)
+        isinstance(offset, (int,long)) and q.setdefault('offset', offset)
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
+        return d.getvalue() if s == OK else None
+
+    #def log( self, bytes=None, offset=None, hthdrs={} ) :
+    #    """Returns a log iterator that can be used to iterate over the list of
+    #    log messages.
+    #    """
+    #    return Log( self, bytes=bytes, offset=offset )
 
     def restart( self, hthdrs={} ) :
         """Restart the CouchDB instance. You must be authenticated as a user
@@ -367,7 +427,7 @@ class Client( object ) :
         return d['ok'] if (s==OK) else False
 
     def stats( self, *paths, **kwargs ) :
-        """Return a JSON converted object containting the statistics for the
+        """Return a JSON converted object containting the statistics for this
         CouchDB server. The object is structured with top-level sections
         collating the statistics for a range of entries, with each individual
         statistic being easily identified, and the content of each statistic
@@ -394,11 +454,155 @@ class Client( object ) :
         s, h, d = _uuids( conn, paths, hthdrs=hthdrs, **q )
         return d['uuids'] if s == OK else None
 
+    #---- Server configuration API
+
+    def config( self, section=None, key=None, hthdrs={}, **kwargs ) :
+        """Configuration of CouchDB server. If ``section`` and ``key`` is not
+        specified, returns the entire CouchDB server configuration as a JSON
+        converted structure. The structure is organized by different configuration
+        sections.
+
+        If ``section`` parameter is passed, returns the configuration
+        structure for a single section specified by ``section``.
+
+        If ``section`` and ``key`` is specified, returns a single configuration
+        value from within a specific configuration section.
+
+        To update a particular section/key, provide a keyword argument called
+        ``value``. Value will be converted to JSON string and passed on to the
+        server.
+        
+        To delete a particular section/key supply ``delete=True`` keyword
+        argument.
+
+        Returns nested dict. of configuration name and value pairs, organized by
+        section.
+
+        Admin-Prev, Yes
+        """
+        paths = []
+        paths.append( section ) if section != None else None
+        paths.append( key ) if key != None else None
+        value = kwargs.get( 'value', None )
+        delete = kwargs.get( 'delete', None )
+        conn, paths = self.conn, (['_config'] + paths)
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        if delete == True :
+            s, h, d = _config( conn, paths, hthdrs=hthdrs, delete=delete )
+        elif value != None :
+            s, h, d = _config( conn, paths, hthdrs=hthdrs, value=value )
+        else :
+            s, h, d = _config( conn, paths, hthdrs=hthdrs )
+        return d
+
+    #---- Server authentication-administration API methods
+
+    def addadmin( self, name, password ) :
+        """Create a server admin by name ``name`` with ``password``."""
+        self.config( section='admins', key=name, value=password )
+
+    def deladmin( self, name ) :
+        """Delete server admin user ``name``"""
+        self.config( section='admins', key=name, delete=True )
+
+    def admins( self ) :
+        """List of admin user"""
+        return self.config( section='admins' )
+
+    def login( self, username, password, hthdrs={} ) :
+        """Login with ``username`` and ``password``, uses session-cookie for
+        authentication, so preserve the following cookie for subsequent
+        request.
+
+        Returns a tuple of (status, header, payload) from HTTP response,
+        header contains the cookie information if the login was successful,
+        this cookie can be preserved to make authenticated request to the DB
+        server.
+        """
+        if self.cookie : 
+            log.warn( 'Client already authenticated (%s)' % self.cookie )
+            return (None, None, None)
+        conn, paths = self.conn, ['_session']
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
+        self.cookie = sc = SimpleCookie()
+        sc.load( h['set-cookie'] )
+        conn.savecookie( self.hthdrs, sc )  # Save the cookie in `self.hthdrs`
+        return s, h, d if s == OK and d['ok'] else (None, None, None)
+
+    def logout( self, hthdrs={} ) :
+        """Logout from authenticated DB session. The authentication cookie is
+        not longer valid."""
+        conn, paths = self.conn, ['_session']
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _session( conn, paths, logout=True, hthdrs=hthdrs )
+
+    def authsession( self, hthdrs={} ) :
+        """Fetch the authenticated session information for this client. Note
+        that browser-session is not handled by the client."""
+        if self._authsession == None :
+            conn, paths = self.conn, ['_session']
+            hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+            s, h, d = _session( conn, paths, hthdrs=hthdrs )
+            self._authsession = AuthSession(d)
+        return self._authsession
+
+    def _sessionuser( self ) :
+        session = self.authsession()
+        c = session.userCtx
+        return session.userCtx.get( 'name', self.defaultuser ) if session.userCtx else self.defaultuser
+        else :
+            return self.defaultuser
+        
+
+    #---- Database APIs via client object,
+    #---- the actual ReST-ful API call is made by the Database class
+
+    def create( self, name, hthdrs={} ) :
+        """Create a new database with the given ``name``. Return, a
+        :class:`couchpy.database.Database` object representing the created
+        database.
+
+        Admin-Prev, No
+        """
+        from   database     import Database
+        db = Database.create( self, name, hthdrs=hthdrs )
+        return db
+
+    def delete( self, db, hthdrs={} ) :
+        """Delete the database db."""
+        from   database     import Database
+        name = db if isinstance( db, basestring ) else db.dbname
+        return Database.delete( self, name, hthdrs=hthdrs )
+
+    def has_database( self, name, hthdrs={} ) :
+        """Return whether the server contains a database with the specified
+        ``name``. Return, `True` if a database with the ``name`` exists, `False`
+        otherwise
+
+        Admin-Prev, No
+        """
+        from   database     import Database
+        return Database( self, name ).ispresent()
+
+    def database( self, name ) :
+        """Return a :class:`couchpy.database.Database` object representing the
+        database with the specified ``name``. Return, a `Database` object
+        representing the created database.
+
+        Admin-Prev, No
+        """
+        from   database     import Database
+        return Database( self, name )
+
+    #---- Place holder API methods
+
     def utils( self ) :
         """To be used with web-interface / browser"""
         log.warn( "_utils/ should be used with a browser to access Futon" )
         return None
 
+    # TODO : This is a evolving feature. A lot needs to be done :)
     def replicate( self, source, target, hthdrs={}, **options ) :
         """Request, configure, or stop, a replication operation.
 
@@ -429,153 +633,37 @@ class Client( object ) :
         s, h, d = _replicate( conn, body, paths, hthdrs=hthdrs )
         return d
 
-    def log( self, bytes=None, offset=None, hthdrs={} ) :
-        """Get CouchDB log, equivalent to accessing the local log file of
-        the corresponding CouchDB instance. When you request the log, the
-        response is returned as plain (UTF-8) text, with an HTTP Content-type
-        header as text/plain. Returns a stream of text bytes.
+    #---- Properties
 
-        ``bytes``,
-            Number of bytes to return from tail end of the log.
-        ``offset``,
-            Offset tail end.
+    databases = property( lambda self : [
+        Database( self, n ) for n in self.all_dbs()
+    ])
+    sessionuser = property( lambda self : self._sessionuser() )
 
-        Admin-Prev, No
-        """
-        conn, paths = self.conn, (self.paths + ['_log'])
-        q = {}
-        isinstance(bytes, (int,long)) and q.setdefault('bytes', bytes)
-        isinstance(offset, (int,long)) and q.setdefault('offset', offset)
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
-        return d.getvalue() if s == OK else None
 
-    def config( self, section=None, key=None, hthdrs={}, **kwargs ) :
-        """Configuration of CouchDB server. If ``section`` and ``key`` is not
-        specified, returns the entire CouchDB server configuration as a JSON
-        converted structure. The structure is organized by different configuration
-        sections. If ``section`` parameter is passed, returns the configuration
-        structure for a single section specified by ``section``. If
-        ``section`` and ``key`` is specified, returns a single configuration
-        value from within a specific configuration section.
+class Log( object ):
+    """Iterate over couchdb server's log messages"""
 
-        To update a particular section/key, provide a keyword argument called
-        ``value``. Value will be converted to JSON string and passed on to the
-        server.
-        
-        To delete a particular section/key supply ``delete=True`` keyword
-        argument.
+    def Message( object ):
+        def __init__( self, message ):
+            self.message = message
 
-        Returns nested dict. of configuration name and value pairs, organized by
-        section.
+        def __str__( self ):
+            return '%s' % self.message
 
-        Admin-Prev, No
-        """
-        paths = []
-        paths.append( section ) if section != None else None
-        paths.append( key ) if key != None else None
-        value = kwargs.get( 'value', None )
-        delete = kwargs.get( 'delete', None )
-        conn, paths = self.conn, (['_config'] + paths)
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        if delete == True :
-            s, h, d = _config( conn, paths, hthdrs=hthdrs, delete=delete )
-        elif value != None :
-            s, h, d = _config( conn, paths, hthdrs=hthdrs, value=value )
-        else :
-            s, h, d = _config( conn, paths, hthdrs=hthdrs )
-        return d
+        def __repr__( self ):
+            return '%r' % self.message
 
-    def addadmin( self, name, password ) :
-        """Create a server admin by name ``name`` with ``password``."""
-        self.config( section='admins', key=name, value=password )
+    def __init__( self, client, bytecount=None, offset=None ):
+        self.bytecount = bytecount
+        self.offset = 0
+        self.rawlog = client.rawlog( bytes=bytecount, offset=offset )
 
-    def deladmin( self, name ) :
-        """Delete server admin user ``name``"""
-        self.config( section='admins', key=name, delete=True )
+    def __iter__( self ):
+        pass
 
-    def admins( self ) :
-        """List of admin user"""
-        return self.config( section='admins' )
+    def next( self ):
+        pass
 
-    def login( self, username, password, hthdrs={} ) :
-        """Login with ``username`` and ``password``, uses session-cookie for
-        authentication, so preserve the following cookie for subsequent
-        request.
-        """
-        if self.cookie : 
-            log.warn( 'Client already authenticated (%s)' % self.cookie )
-            return (None, None, None)
-        conn, paths = self.conn, ['_session']
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
-        self.cookie = sc = SimpleCookie()
-        sc.load( h['set-cookie'] )
-        conn.savecookie( self.hthdrs, sc )
-        return s, h, d if s == OK and d['ok'] else (None, None, None)
-
-    def logout( self, hthdrs={} ) :
-        """Logout from authenticated DB session"""
-        conn, paths = self.conn, ['_session']
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _session( conn, paths, logout=True, hthdrs=hthdrs )
-
-    def authsession( self, hthdrs={} ) :
-        """Fetch the authenticated session information for this client. Note
-        that browser-session is not handled by the client."""
-        if self._authsession == None :
-            conn, paths = self.conn, ['_session']
-            hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-            s, h, d = _session( conn, paths, hthdrs=hthdrs )
-            self._authsession = AuthSession(d)
-        return self._authsession
-
-    def sessionuser( self ) :
-        session = self.authsession()
-        if session.userCtx :
-            return session.userCtx.get( 'name', self.defaultuser )
-        else :
-            return self.defaultuser
-        
-
-    #---- Database,
-    #---- the actual ReST-ful API call is made by the Database class
-
-    def create( self, name, hthdrs={} ) :
-        """Create a new database with the given ``name``. Return, a
-        :class:`couchpy.database.Database` object representing the created
-        database.
-
-        Admin-Prev, No
-        """
-        from   database     import Database
-        db = Database.create( self, name, hthdrs=hthdrs )
-        return db
-
-    def delete( self, db, hthdrs={} ) :
-        """Delete the database db."""
-        from   database     import Database
-        name = db if isinstance( db, basestring ) else db.dbname
-        return Database.delete( self, name, hthdrs=hthdrs )
-
-    def has_database( self, name, hthdrs={} ) :
-        """Return whether the server contains a database with the specified
-        ``name``. Return, `True` if a database with the ``name`` exists, `False`
-        otherwise
-
-        Admin-Prev, No
-        """
-        from   database     import Database
-        db = Database( self, name )
-        return db.ispresent()
-
-    def database( self, name ) :
-        """Return a :class:`couchpy.database.Database` object representing the
-        database with the specified ``name``. Return, a `Database` object
-        representing the created database.
-
-        Admin-Prev, No
-        """
-        from   database     import Database
-        db = Database( self, name )
-        return db
+    def _parselog( self, text ):
+        logs = text.split('\n\n')

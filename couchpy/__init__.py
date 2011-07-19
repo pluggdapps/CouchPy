@@ -1,4 +1,4 @@
-#import client
+from    client      import Client
 #import database
 #import doc
 #import designdoc

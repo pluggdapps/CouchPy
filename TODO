@@ -6,3 +6,6 @@ Track the project at,
 - Composing HTTP headers for request is very primitive, use MultiDict or
   something similar to HTTPMessage (used for response header) to make it more
   developer friendly.
+
+- Log messages :
+    How to iterate over all the log messages using _log API ?

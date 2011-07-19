@@ -4,8 +4,8 @@ standard library.
 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-# Derived from, Christopher Lenz's work
+
+# Derived from, Christopher Lenz's couchdb-python
 
 
 # TODO :
