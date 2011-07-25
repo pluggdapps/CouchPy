@@ -4,11 +4,9 @@ cases and don't expect doc-id to be in sort order
 """
 
 import time
-from    copy                    import deepcopy
+from    copy            import deepcopy
 
-from    couchpy.designdoc       import DesignDocument
-from    couchpy.query           import Query
-from    couchpy.view            import View
+from    couchpy.doc     import DesignDocument, Query, View
 
 # Gotcha :
 #   1. There is a big gotcha that seems to be present in Python. That is, when

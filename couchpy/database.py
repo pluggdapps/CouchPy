@@ -1,59 +1,114 @@
-"""Database definition for accessing CouchDB database. An instance of
+"""Database definition for accessing a CouchDB database. An instance of
 :class:`Database` class corresponds to a single database in CouchDB server,
 the object can be used to interface with it. Aside from that,
 :class:`Database` objects provide pythonified way of accessing it.
 
-Create a client object,
+Create a database,
 
->>> c = Client()
->>> db = c.create('dbname_first') # Create
+>>> couch = Client()
+>>> db = couch.put('contacts')  # Create
+
+Example list of operations that can be done with :class:`Database` instance :
+
+Get database information,
+>>> db.info
+{ ... }
+
+Create a database,
+>>> db = couch.Database('blog').put()
+
+Delete the database,
+>>> db.delete()
+
+Track changes done to database,
+>>> db.changes()
+
+Compact database,
+>>> db.compact()
+
+View cleanup,
+>>> db.viewcleanup()
+
+Ensure full commit,
+>>> db.ensurefullcommit()
+
+Bulk document inserts,
+>>> docs = [ {'fruit' : 'orange'}, {'fruit' : 'apple'} ]
+>>> db.bulkdocs( docs )
+>>> db.bulkdocs( docs, atomic=True )
+
+Get / Set security object,
+>>> db.security({ "admins" : { "names" : ["joe"] } })
+>>> db.security()
+{u'admins': {u'names': [u'pratap']}}
+
+Get / Set revs_limit
+>>> db.revslimit( 122 )
+>>> db.revslimit()
+122
+
+Iterate over all the documents in the database. The following example emits a
+list of document ids.
+>>> docs = [ doc for doc in db ]
+[u'011b9da9723dea64c645554bcf0261619efd68a1',
+ u'05ee18cc4b79572594aea1d71253d71538609597',
+ ...
+]
+
+Access the document like database dictionary,
+>>> u'011b9da9723dea64c645554bcf0261619efd68a1' in db
+True
+>>> db[u'011b9da9723dea64c645554bcf0261619efd68a1']
+<Document u'011b9da9723dea64c645554bcf0261619efd68a1':u'1-16565128019675206d77f6836039af0e'>
+
+Remove document from database
+>>> del db[u'011b9da9723dea64c645554bcf0261619efd68a1']
+
+Number documents stored in the database,
+>>> len(db)
+
+Check for database availability,
+>>> bool( db )
 """
+
 import sys, re, logging
 
-import couchpy.rest       as rest
-from   couchpy.httperror  import *
-from   couchpy.httpc      import HttpSession, ResourceNotFound, OK, CREATED
-from   couchpy.client     import Client
-from   couchpy.doc        import Document, LocalDocument
-from   couchpy.designdoc  import DesignDocument
-from   couchpy.attachment import Attachment
-from   couchpy.query      import Query
-from   couchpy.mixins     import MixinDB
-
-# TODO :
-#   1. _changes, 'longpoll' and 'continuous' modes are not yet supported.
-#   3. _missing_revs, _revs_diff, _security
-#   6. Should we provide attachment facilities for local docs ?
+import rest
+from   couchpy      import hdr_acceptjs, hdr_ctypejs, BaseIterator
+from   httperror    import *
+from   httpc        import HttpSession, ResourceNotFound, OK, CREATED, ACCEPTED
+from   doc          import Document, LocalDocument, DesignDocument, Query
 
 log = logging.getLogger( __name__ )
-hdr_acceptjs = { 'Accept' : 'application/json' }
-hdr_ctypejs = { 'Content-Type' : 'application/json' }
 
-def _db( conn, paths=[], hthdrs={} ) :
+def _getdb( conn, paths=[], hthdrs={} ) :
     """GET /<db>"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.get( paths, hthdrs, None )
     if s == OK :
         return s, h, d
     else :
+        log.error( 'GET request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
-def _createdb( conn, paths=[], hthdrs={} ) :
+def _putdb( conn, paths=[], hthdrs={} ) :
     """PUT /<db>"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.put( paths, hthdrs, None )
     if s == CREATED and d['ok'] == True :
         return s, h, d
     else :
+        log.error( 'PUT request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _deletedb( conn, paths=[], hthdrs={} ) :
     """DELETE /<db>"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.delete( paths, hthdrs, None )
     if s == OK and d['ok'] == True :
         return s, h, d
     else :
+        log.error( 'DELETE request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _changes( conn, paths=[], hthdrs={}, **query ) :
@@ -69,34 +124,39 @@ def _changes( conn, paths=[], hthdrs={}, **query ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'GET request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _compact( conn, paths=[], hthdrs={} ) :
-    """POST /<db>/_compact;
-       POST /<db>/_compact>/<designdoc>"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    """POST /<db>/_compact              To compact database
+       POST /<db>/_compact>/<designdoc> To compact view
+    """
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, None )
-    if s == OK and d["ok"] == True :
+    if s == ACCEPTED and d["ok"] == True :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _view_cleanup( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_view_cleanup"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, None )
-    if s == OK and d["ok"] == True :
+    if s == ACCEPTED and d["ok"] == True :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _ensure_full_commit( conn, paths=[], hthdrs={} ) :
     """POST /<db>/_ensure_full_commit"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, None )
-    if s == OK and d["ok"] == True :
+    if s == CREATED  and d["ok"] == True :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _bulk_docs( conn, docs, atomic=False, paths=[], hthdrs={} ) :
@@ -111,6 +171,7 @@ def _bulk_docs( conn, docs, atomic=False, paths=[], hthdrs={} ) :
     if s == CREATED :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
@@ -118,22 +179,24 @@ def _temp_view( conn, designdoc, paths=[], hthdrs={}, **query ) :
     query,
         Same query parameters as that of design-doc views
     """
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     body = rest.data2json( designdoc )
     s, h, d = conn.post( paths, hthdrs, body, _query=query.items() )
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _purge( conn, body, paths=[], hthdrs={} ) :
     """POST /<db>/_purge"""
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     body = rest.data2json( body )
     s, h, d = conn.post( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _all_docs( conn, keys=None, paths=[], hthdrs={}, q={} ) :
@@ -149,15 +212,18 @@ def _all_docs( conn, keys=None, paths=[], hthdrs={}, q={} ) :
     Note that `q` object should provide .items() method with will return a
     list of key,value query parameters.
     """
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if keys == None :
+        method = 'GET'
         s, h, d = conn.get( paths, hthdrs, None, _query=q.items() )
     else :
+        method ='POST'
         body = rest.data2json({ 'keys' : keys })
         s, h, d = conn.post( paths, hthdrs, body, _query=q.items() )
     if s == OK :
         return s, h, d
     else :
+        log.error( '%s request to /%s failed' % (method, '/'.join(paths)) )
         return (None, None, None)
 
 def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
@@ -168,6 +234,7 @@ def _missing_revs( conn, revs=[], paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
@@ -178,6 +245,7 @@ def _revs_diff( conn, revs=[], paths=[], hthdrs={} ) :
     if s == OK :
         return s, h, d
     else :
+        log.error( 'POST request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
 def _security( conn, paths=[], security=None, hthdrs={} ) :
@@ -185,15 +253,18 @@ def _security( conn, paths=[], security=None, hthdrs={} ) :
     GET /<db>/_security
     PUT /<db>/_security
     """
-    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
+    hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     if security == None :
+        method = 'GET'
         s, h, d = conn.get( paths, hthdrs, None )
     else :
+        method = 'PUT'
         body = rest.data2json( security )
         s, h, d = conn.put( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
+        log.error( '%s request to /%s failed' % (method, '/'.join(paths)) )
         return (None, None, None)
 
 def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
@@ -204,72 +275,98 @@ def _revs_limit( conn, paths=[], limit=None, hthdrs={} ) :
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     body = '%s' % limit if limit != None else None
     if limit == None :
+        method = 'GET'
         s, h, d = conn.get( paths, hthdrs, body )
     else :
+        method = 'PUT'
         s, h, d = conn.put( paths, hthdrs, body )
     if s == OK :
         return s, h, d
     else :
+        log.error( '%s request to /%s failed' % (method, '/'.join(paths)) )
         return (None, None, None)
 
 
 
-class Database( MixinDB, object ) :
+class Database( object ) :
+    """Instantiate the database object corresponding to ``dbname`` in
+    CouchdDB server provided by ``client``. Client's connection will be
+    used for all CouchDB access.
+
+    Optional arguments :
+
+    ``debug``, 
+        for enhanced logging, if not specified, client's `debug` attribute
+        will be used.
+
+    ``hthdrs``,
+        Dictionary of HTTP request headers. The header fields and values
+        will be remembered for every request made via this ``database``
+        object. Aside from these headers, if a method supports `hthdrs`
+        key-word argument, it will be used for a single request.
+    """
+
+    _singleton_docs = {}   # { <dbname>  : { 'active' : {...}, 'cache' : {...} }
 
     def __init__( self, client, dbname, hthdrs={}, **kwargs ) :
-        """Instantiate the database object corresponding to ``dbname`` in
-        CouchdDB server provided by ``client``. Client's connection will be
-        used for all CouchDB access.
-
-        Optional arguments :
-
-        ``debug``, 
-            for enhanced logging
-        ``hthdrs``,
-            Dictionary of HTTP request headers. The header fields and values
-            will be remembered for every request made via this ``database``
-            object. Aside from these headers, if a method supports `hthdrs`
-            key-word argument, it will be used for a single request.
-        """
         self.client, self.conn = client, client.conn
         self.dbname = Database.validate_dbname( dbname )
         self.debug = kwargs.pop( 'debug', client.debug )
+        self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
 
         self.paths = client.paths + [ dbname ]
-        self.info = {}
+        self._info = {}
         self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
+
+        # Every time a Document object is instantiated it will be moved to the
+        # `active` list. Once commit() method is called on the database
+        # instance, all dirty documents will be commited to the server and
+        # moved to `cached` list.
+        Database._singleton_docs.setdefault(
+            self.dbname, { 'active' : {}, 'cache' : {} } 
+        )
+
+    
+    #---- Pythonification of instance methods. They are supposed to be
+    #---- wrappers around the actual API.
 
     def __call__( self ) :
         """Return information about this database, refer to ``GET /db`` API
-        from CouchDB to know the structure of information. 
+        from CouchDB reference manual to know the structure of information.
+        Every time the object is called, database information will be fetched
+        from the server. For efficiency reasons, access database information
+        via `info` attribute, which will fetch the information only once and
+        cache them for subsequent use.
 
         Admin-Prev, No
         """
-        s, h, d = _db( self.conn, self.paths, hthdrs=self.hthdrs )
-        self.info = d
-        return d
+        s, h, d = _getdb( self.conn, self.paths, hthdrs=self.hthdrs )
+        self._info = d if d != None else {}
+        return self._info
 
     def __iter__( self ) :
-        """Iterate over all document IDs in this database. For every
-        iteration, `_id` value will be yielded."""
-        d = self.docs()
-        return iter( map( lambda x : x['id'], d['rows'] ))
+        """Iterate over all documents in this database. For every
+        iteration, :class:`couchpy.doc.Document` value will be yielded.
+
+        Admin-prev, No
+        """
+        d = self.all_docs()
+        return iter( map( lambda x : self.Document( x['id'] ), d['rows'] ))
 
     def __getitem__( self, key ) :
-        """Fetch the latest revision of the document specified by ``key`` and
-        return a corresponding :class:`couchpy.doc.Document` object. To avoid
-        fetching document from the database, directly instantiate the Document
-        object as below,
-        
-        >>> Document( db, _id, fetch=False )
+        """Return a :class:`couchpy.doc.Document` instance, for the document
+        specified by ``key`` which is document's `_id`.
 
-        Where `db` is :class:`Database` object and _id is document-id
+        Admin-prev, No
         """
-        return Document( self, key )
+        return Document( self, key, fetch=True )
 
     def __len__( self ) :
-        """Return number of documents in the database."""
-        d = self.docs()
+        """Return number of documents in the database.
+
+        Admin-prev, No
+        """
+        d = self.all_docs()
         return d['total_rows']
 
     def __nonzero__(self):
@@ -279,14 +376,14 @@ class Database( MixinDB, object ) :
 
     def __delitem__(self, docid) :
         """Remove the document specified by ``docid`` from database"""
-        s, h, d = Document.head( self, docid )
-        etag = h['Etag'][1:-1]      # Strip the leading and trailing quotes
-        self.deletedoc( docid, rev=etag )
+        doc =  Document( self, docid )
+        headers = doc.head()
+        etag = headers['Etag'][1:-1]    # Strip the leading and trailing quotes
+        doc.delete( rev=etag )
 
     def __eq__( self, other ) :
         if not isinstance( other, Database ) : return False
-        if self.dbname == other.dbname : return True
-        return False
+        return True if self is other else False
 
     def __repr__( self ) :
         return '<%s %r>' % (type(self).__name__, self.dbname)
@@ -296,10 +393,13 @@ class Database( MixinDB, object ) :
         the database.
         """
         try :
-            Document.head( self, docid )
+            doc = Document( self, docid )
+            doc.head()
             return True
         except :
             return False
+
+    #---- API methods for database
 
     def ispresent( self ) :
         """Return a boolean, on database availability in the server."""
@@ -318,24 +418,22 @@ class Database( MixinDB, object ) :
         query parameters,
 
         ``feed``,
-            Type of feed, longpoll | continous | normal
+            Type of feed, longpoll | continuous | normal
         ``filter``,
             Filter function from a design document to get updates.
         ``heartbeat``,
-            Period after which an empty line is sent during longpoll or
-            continuous.
+            Period in milliseconds, after which an empty line is sent during
+            longpoll or continuous.
         ``include_docs``,
-            Include the document with the result.
+            Must be 'true' to include the document with the result.
         ``limit``,
             Maximum number of rows to return.
         ``since``,
             Start the results from the specified sequence number.
         ``timeout``,
-            Maximum period to wait before the response is sent, in
-            milliseconds.
+            Maximum period in milliseconds to wait before the response is sent.
 
-        Admin-prev
-            No
+        Admin-prev No
         """
         conn, paths = self.conn, ( self.paths + ['_changes'] )
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -365,12 +463,12 @@ class Database( MixinDB, object ) :
         ``POST /<db>/_compact`` and ``POST /<db>/_compact>/<designdoc>`` for
         more information.
 
-        Admin-prev, No
+        Admin-prev, Yes
         """
-        conn, paths = ( self.conn, (self.paths + ['_compact']) 
-                      ) if designdoc == None else ( 
-                        self.conn, (self.paths + ['_compact',designdoc])
-                      )
+        if designdoc == None :
+            conn, paths = self.conn, (self.paths + ['_compact']) 
+        else :
+            conn, paths = self.conn, (self.paths + ['_compact',designdoc])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _compact( conn, paths, hthdrs=hthdrs )
         return d
@@ -383,7 +481,7 @@ class Database( MixinDB, object ) :
         conn, paths = self.conn, (self.paths + ['_view_cleanup'])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _view_cleanup( conn, paths, hthdrs=hthdrs )
-        return None
+        return d
 
     def ensurefullcommit( self, hthdrs={} ) :
         """Commit recent changes to disk. You should call this if you want to
@@ -405,20 +503,45 @@ class Database( MixinDB, object ) :
         creating new documents the document ID is optional. For updating
         existing documents, you must provide the document ID, revision
         information, and new document values.
+
         You can optionally delete documents during a bulk update by adding the
         `_deleted` field with a value of true to each docment ID/revision
         combination within the submitted JSON structure.
 
-        Return JSON converted object as returned by CouchDB. It depends on
-        whether atomic is True or False. Refer to ``POST /<db>/_bulk_docs``
-        section in CouchDB API reference manual for more information.
+        `docs` contains a list of :class:`Document` instances or dictionaries.
+        In case of :class:`Document` instance, the object instance will be
+        updated with the new `revision` number.
 
+        To perform document updates and inserts atomically, pass `atomic`
+        keyword as True.
+
+        Returns JSON converted return value for CouchDB API /db/_bulk_docs
+        
         Admin-prev, No
         """
-        conn, paths, h = self.conn, (self.paths + ['_bulk_docs']), hthdrs
-        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _bulk_docs( conn, docs, atomic=atomic, paths=paths, hthdrs=h )
+        conn, paths = self.conn, (self.paths + ['_bulk_docs'])
+        h = conn.mixinhdrs( self.hthdrs, hthdrs )
+        docs_ = []
+        for doc in docs :
+            if isinstance(doc, dict) :
+                docs_.append(doc)
+            elif isinstance(doc, Document) :
+                docs_.append( dict( doc.item() ))
+            else :
+                raise CouchPyError( 'bulk docs contains unknown element' )
+        s, h, d = _bulk_docs(conn, docs_, atomic=atomic, paths=paths, hthdrs=h)
         return d
+
+    def bulkdelete( self, docs=[], atomic=False, hthdrs={} ) :
+        """Same as :func:`Database.bulkdocs` except that the `_delete`
+        property in each document will be set to True, thus deleting the
+        documents from the database. To delete the documents in atomic
+        fashion, pass keyword parameter `atomic` as True.
+
+        Returns JSON converted return value for CouchDB API /db/_bulk_docs
+        """
+        docs_ = [ doc.setdefault( '_deleted', True ) for doc in docs ]
+        return self.bulkdocs( docs, atomic=atomic, hthdrs=hthdrs )
 
     def tempview( self, designdoc, hthdrs={}, **query ) :
         """Create (and execute) a temporary view based on the view function
@@ -435,7 +558,7 @@ class Database( MixinDB, object ) :
         s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
         return d
 
-    def purge( self, doc, revs=None, hthdrs={} ) :
+    def purge( self, docs, revs=None, hthdrs={} ) :
         """A database purge permanently removes the references to deleted
         documents from the database. Deleting a document within CouchDB
         does not actually remove the document from the database, instead,
@@ -447,31 +570,30 @@ class Database( MixinDB, object ) :
         To reclaim disk space, you should run a database compact operation.
 
         Either pass a JSON convertible object that will be directly sent as
-        request body or, pass document-id and a corresponding revision list
-        or just a Document object. Returns JSON converted object as returned
-        by CouchDB
+        request body or, pass a list of documents where each element of the
+        list can be a document dictionary or :class:`Document` object.
+
+        Returns JSON converted object as returned by CouchDB API /db/_purge
 
         >>> d = { "FishStew" : [ "17-b3eb5ac6fbaef4428d712e66483dcb79" ] }
-        >>> revs = [ '17-b3eb5ac6fbaef4428d712e66483dcb79' ]
-        >>> db.purge( 'Fishstew', revs=revs )
         >>> db.purge( d )
-        >>> db.purge( doc )
+        >>> docs = db.all_docs()
+        >>> db.purge( docs )
 
-        Admin-prev
-            No
+        Admin-prev Yes
         """
         conn, paths = self.conn, (self.paths + ['_purge'])
-        if isinstance(doc, dict) :
-            body = doc
+        if isinstance(docs, dict) :
+            body = docs
         else :
-            _id = doc._id if isinstance(doc, Document) else doc
-            revs = [ doc._rev ] if revs == None else revs
-            body = { _id : revs }
+            body = {}
+            [ body.setdefault(doc['_id'], []).append( doc['_rev'] )
+              for doc in docs ]
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
-    def docs( self, keys=None, hthdrs={}, _q={}, **query ) :
+    def all_docs( self, keys=None, hthdrs={}, _q={}, **params ) :
         """Return a JSON structure of all of the documents in a given database.
         The information is returned as a JSON structure containing
         meta information about the return structure, and the list documents
@@ -527,8 +649,7 @@ class Database( MixinDB, object ) :
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_all_docs'])
-        q = _q if isinstance(_q, Query) else Query( params=dict(_q.items()) )
-        q.update( query )
+        q = _q if isinstance(_q, Query) else Query( q=_q, **params )
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
         return d
@@ -553,6 +674,8 @@ class Database( MixinDB, object ) :
         ``security``,
             Security object contains admins and readers
         Return the current security object
+
+        Admin-prev, Yes for setting the security object
         """
         conn, paths = self.conn, (self.paths + ['_security'])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -562,131 +685,24 @@ class Database( MixinDB, object ) :
     def revslimit( self, limit=None, hthdrs={} ) :
         """Get or Set the current revs_limit (revision limit) for database.
         To set revs_limit, pass the value as key-word argument ``limit``
+
+        Admin-prev, Yes for setting the revision limit
         """
         conn, paths = self.conn, (self.paths + ['_revs_limit'])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _revs_limit( conn, paths, limit=limit, hthdrs=hthdrs )
         return d
 
-    def createdoc( self, docs=None, localdocs=None, designdocs=None,
-                   filepaths=[], doc_cls=None, hthdrs={}, fetch=False,
-                   **query ) :
-        """Create one or more document in this database. Documents can be of
-        Normal documents, Local documents Design document.
+    def Document( self, doc, *args, **kwargs ):
+        return Document( self, doc, *args, **kwargs )
 
-        Optionally, provide a list of file-paths, to be added as attachments to
-        the document, HTTP headers, and query parameters,
+    def LocalDocument( self, doc, *args, **kwargs ):
+        return LocalDocument( self, doc, *args, **kwargs )
 
-        query parameters, for normal documents / local documents
+    def DesignDocument( self, doc, *args, **kwargs ):
+        return DesignDocument( self, doc, *args, **kwargs )
 
-        ``batch``,
-            if specified 'ok', allow document store request to be batched with
-            other
-
-        Return Document object (or) LocalDocument object (or) DesignDocument
-        object.
-
-        Admin-prev, No
-        """
-        conn, q, f = self.conn, query, filepaths
-        h = conn.mixinhdrs( self.hthdrs, hthdrs )
-        r = None
-        if docs != None and doc_cls != None :
-            r = [ doc_cls.create(self, doc, hthdrs=h, fetch=fetch, **q)
-                  for doc in docs ]
-
-        elif docs != None and isinstance( docs, (list, tuple) ) :
-            r = [ Document.create(self, doc, hthdrs=h, fetch=fetch, **q)
-                  for doc in docs ]
-
-        elif docs != None :
-            r = Document.create(
-                    self, docs, attachfiles=f, hthdrs=h, fetch=fetch, **q
-                )
-
-        elif localdocs != None and isinstance( localdocs, (list, tuple) ) :
-            r = [ LocalDocument.create(self, doc, hthdrs=h, fetch=fetch, **q )
-                  for doc in localdocs ]
-
-        elif localdocs != None :
-            r = LocalDocument.create(
-                    self, localdocs, hthdrs=h, fetch=fetch, **q
-                )
-
-        elif designdocs != None and isinstance( designdocs, (list,tuple) ) :
-            r = [ DesignDocument.create(self, doc, hthdrs=h, fetch=fetch ) 
-                  for doc in designdocs ]
-
-        elif designdocs != None :
-            r = DesignDocument.create(self, doc, hthdrs=h, fetch=fetch )
-
-        return r
-
-    def deletedoc( self, docs=None, localdocs=None, designdocs=None,
-                   _rev=None, hthdrs={} ) :
-        """Delete one or more documents from the database and all the
-        attachments contained in the document(s). Documents can be of,
-        Normal documents, Local documents, Design documents.
-
-        When deleting single document, key-word argument `_rev` (current revision
-        of the document) should be specified.
-        When deleting multiple documents, `docs` must be a list of tuples,
-        [ (docid, document-revision), ... ]
-
-        Admin-Prev, No
-        """
-        def delete( cls, docs_, hthdrs={}, _rev=None ) :
-            if isinstance( docs_, (list,tuple) ) :
-                for doc in docs_ :
-                    if isinstance(doc, cls) :
-                        cls.delete( self, doc, hthdrs=hthdrs, _rev=_rev )
-                    else :
-                        doc, _rev = doc
-                        cls.delete( self, doc, hthdrs=hthdrs, _rev=_rev )
-            else :
-                cls.delete( self, docs_, hthdrs=h, _rev=_rev )
-
-        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
-        if docs!=None : delete( Document, docs, hthdrs=h, _rev=_rev )
-        elif localdocs!=None : delete(LocalDocument, docs, hthdrs=h, _rev=_rev)
-        elif designdocs!=None : delete(DesignDocument, docs, hthdrs=h, _rev=_rev)
-        return None
-
-    def designdocs( self, keys=None, hthdrs={}, **query ) :
-        """Return a list of design documentation ids, internally, query
-        parameters,
-        parameters, ``startkey=_design/`` and ``endkey=_design0`` will be used
-        to fetch the design documents.
-        Other query parameters similar to that of view, can be passed as
-        key-word arguments.
-        """
-        q = Query( startkey="_design/", endkey="_design0" )
-        q.update( **query )
-        hthdrs = self.conn.mixinhdrs( self.hthdrs, hthdrs )
-        d = self.docs( keys=keys, hthdrs=hthdrs, _q=q )
-        return map( lambda x : x['id'], d['rows'] )
-
-    def copydoc( self, docid, rev, toid, asrev=None, hthdrs={} ) :
-        """Copy the specified document ``docid`` from revision ``rev`` to
-        document ``toid`` as revision ``asrev``.
-
-        On success, return destination Document object, which can be of the
-        type Document or LocalDocument or DesignDocument, else None.
-
-        Admin-prev, No
-        """
-        h = self.conn.mixinhdrs( self.hthdrs, hthdrs )
-        if docid.startswith( '_local' ) :
-            d = LocalDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
-                                    rev=rev )
-        elif docid.startswith( '_design' ) :
-            d = DesignDocument.copy( self, docid, toid, asrev=asrev, hthdrs=h,
-                                     rev=rev )
-        else :
-            d = Document.copy( self, docid, toid, asrev=asrev, hthdrs=h,
-                               rev=rev )
-        return d
-
+    #---- Properties
 
     _committed_update_seq = lambda self : self()['committed_update_seq']
     _compact_running      = lambda self : self()['compact_running']
@@ -698,6 +714,9 @@ class Database( MixinDB, object ) :
     _purge_seq            = lambda self : self()['purge_seq']
     _update_seq           = lambda self : self()['update_seq']
 
+    #---- Database Information
+    info                 = property( lambda self : self._info or self() )
+    #---- as attributes to this instance.
     committed_update_seq = property( _committed_update_seq )
     compact_running      = property( _compact_running )
     disk_format_version  = property( _disk_format_version )
@@ -708,48 +727,75 @@ class Database( MixinDB, object ) :
     purge_seq            = property( _purge_seq )
     update_seq           = property( _update_seq )
 
-    @classmethod
-    def create( cls, client, dbname, hthdrs={} ) :
-        """
-        Creates a new database. The database name must be composed of one or
-        more of the following characters.
-        * Lowercase characters (a-z)
+    #---- Other properties
+    singleton_docs       = property( lambda self : Database._singleton_docs[self.dbname] )
+
+    def put( self, hthdrs={} ) :
+        """Create a new database, corresponding to this instance. The database
+        name must be adhere to the following rules.
         * Name must begin with a lowercase letter
-        * Digits (0-9)
-        * Any of the characters _, $, (, ), +, -, and /
+        * Contains lowercase characters (a-z)
+        * Contains digits (0-9)
+        * Contains any of the characters _, $, (, ), +, -, and /
 
-        Return,
-            Database object
-        Admin-prev
-            No
+        Return, Database object
+
+        Admin-prev Yes
         """
-        conn, paths = client.conn, (client.paths + [ dbname ])
-        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
-        s, h, d = _createdb( conn, paths, hthdrs=hthdrs )
-        if d != None :
-            return Database( client, dbname, hthdrs=hthdrs )
-        else :
+        conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
+        s, h, d = _putdb( conn, paths, hthdrs=hthdrs )
+        if d is None :
             return None
+        return self
 
-    @classmethod
-    def delete( cls, client, dbname, hthdrs={} ) :
-        """Deletes the specified database, and all the documents and
+    def delete( self, hthdrs={} ) :
+        """Delete the database from the server, and all the documents and
         attachments contained within it.
 
-        Return,
-            JSON converted object as returned by couchDB.
-        Admin-prev
-            No
+        Return, JSON converted object as returned by couchDB.
+
+        Admin-prev Yes
         """
-        conn, paths = client.conn, (client.paths + [dbname])
-        hthdrs = conn.mixinhdrs( client.hthdrs, hthdrs )
+        conn, paths = self.conn, self.paths
+        hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _deletedb( conn, paths, hthdrs=hthdrs )
-        return d
+        return None
+
+    def fetch( self ) :
+        """Call to this method will bulk fetch all the active document that are
+        yet to be fetched from the server.
+        """
+        activedocs = self.singleton_docs['active'].values()
+        fetchdocs  = filter( lambda d : d._x_fetched == False, activedocs )
+        fetchids   = map( lambda d : d._id, fetchdocs )
+        result     = self.all_docs( keys=fetchids, include_docs=True )
+        freshdocs  = dict([ (d['id'], d['doc']) for d in results['rows'] ])
+        # Invoke `_onfetch` callback for documents that were successfully
+        # commited
+        [ doc._onfetch( freshdocs[ doc._id ] ) for doc in fetchdocs ]
+        return result
+
+    def commit( self ):
+        """Call to this method will bulk commit all the active documents that
+        are dirtied.
+        """
+        activedocs = self.singleton_docs['active'].values()
+        dirtydocs  = filter( lambda d : d._x_dirtied, activedocs )
+        result     = self.bulkdocs( dirtydocs )
+        # Invoke `_oncommit` callback for documents that were successfully
+        # commited
+        success = dict([
+            (x['id'], x) for x in result if 'id' in x and 'rev' in x
+        ])
+        [ doc._oncommit( _rev=success[doc._id]['rev'] )
+          for doc in dirtydocs if doc._id in success.keys() ]
+        return result
 
 
     # TODO : Collect all special db names ...
     SPECIAL_DB_NAMES = set([ '_users', ])
-    VALID_DB_NAME = re.compile(r'^[a-z][a-z0-9_$()+-/]*$')
+    VALID_DB_NAME = re.compile(r'^[a-z][a-z0-9_$()+/-]*$')
     @classmethod
     def validate_dbname( cls, name ) :
         if name in cls.SPECIAL_DB_NAMES :
@@ -757,3 +803,20 @@ class Database( MixinDB, object ) :
         if not cls.VALID_DB_NAME.match( name ) :
             raise InvalidDBname('Invalid database name')
         return name
+
+
+class DatabaseIterator( BaseIterator ):
+    def __init__( self, client, values=[], regexp=None ):
+        if regexp :
+            c = re.compile( regexp )
+            values = filter( c.match, values )
+        self.client = client
+        BaseIterator.__init__( self, values=values )
+
+    def __iter__( self ):
+        return self
+
+    def next( self ):
+        if self.values :
+            return Database( self.client, self.values.pop(0) )
+        raise StopIteration

@@ -88,7 +88,7 @@ class HttpSession( object ) :
         retry_delays
             list of request retry delays.
         """
-        from client   import __VERSION__ as VERSION
+        from couchpy   import __version__ as VERSION
 
         # Make a copy of constructor options
         self.user_agent = '%s-%s' % (user_agent, VERSION)

@@ -4,7 +4,7 @@ import sys, pprint, logging
 
 from   couchpy.client       import Client
 from   couchpy.database     import Database
-from   couchpy.query        import Query
+from   couchpy.doc          import Query
 from   httperror            import *
 
 log = logging.getLogger( __name__ )

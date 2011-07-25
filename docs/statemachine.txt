@@ -1,0 +1,51 @@
+       /    fetch()      | aget()    \                    /ST_ACTIVE_INVALID
+      /     post()       | aput()     \                  / ST_ACTIVE_POST
+Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
+      \     delete()     |            /                  \ ST_ACTIVE_DIRTY
+        \ side-effects() | attach()  /                    \ST_CACHE_INVALID
+
+
+                        *-------------------------------------------*--------*
+                        |                                           |        |
+                        |                    *-------------         |        |
+                        |                    |             |        |        |
+                        V                    V             |        |        |
+                *===================* *================*   |        |        |
+                | ST_ACTIVE_INVALID | | ST_ACTIVE_POST |   |        |        |
+                |      aget()       | |  side-effect() |   |        |        |
+                |      aput()       | |    attach()    |   |        |        |
+                |     adelete()     | *================*   |        |        |
+                |      delete()     |   |       |          |        |        |
+                *===================*   |       |          |        |        |
+                   ^        |    |    (try)     |         Instantiation      |
+                   |     fetch() |      |      post()     (without rev)      |
+                   |        |    |      |     fetch()      |        |        |
+                   |        |    |      |    delete()      |        |        |
+                delete()    |   DB-fetch()      |      *=======*    |        |
+                   |        V       |           |      | Start |    |        |
+                 *===============*  |           |      *=======*    |        |
+          *----->|ST_ACTIVE_VALID|<-*-----------*                   |        |
+          |      |    fetch()    |                                  |        |
+          |      |     aget()    |                                  |        |
+          |      |     aput()    |                                  |        |
+          |      |   adelete()   |                                  |        |
+          |      *===============*                                  |        |
+         put()                |                                     |        |
+          |              side-effects()                             |        |
+          |                   |                                     |        |
+  *=================*         |                                     |        |
+  | ST_ACTIVE_DIRTY |<--------*                                     |        |
+  |  side-effects() |                                               |        |
+  |     aget()      |                                  *==================*  |
+  |     aput()      |----- DB-commit() --------------->| ST_CACHE_INVALID |  |
+  |   adelete()     |                                  *==================*  |
+  *=================*                                           |            |
+                                                                |            |
+                                                                |            |
+                                                          Instantiation      |
+                                                            (with rev)-------*
+                                                                |
+                                                                |
+                                                           *=======*
+                                                           | Start |
+                                                           *=======*

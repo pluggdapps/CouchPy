@@ -1,9 +1,7 @@
 from   copy                 import deepcopy
 from   couchpy.client       import Client
 from   couchpy.database     import Database
-from   couchpy.doc          import Document
-from   couchpy.view         import View
-from   couchpy.query        import Query
+from   couchpy.doc          import Document, View, Query
 
 URL = 'http://pratap:pratap@localhost:5984/'
 c = Client( url=URL )
