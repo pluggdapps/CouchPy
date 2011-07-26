@@ -20,7 +20,7 @@ Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
                    ^        |    |    (try)     |         Instantiation      |
                    |     fetch() |      |      post()     (without rev)      |
                    |        |    |      |     fetch()      |        |        |
-                   |        |    |      |    delete()      |        |        |
+              invalidate()  |    |      |    delete()      |        |        |
                 delete()    |   DB-fetch()      |      *=======*    |        |
                    |        V       |           |      | Start |    |        |
                  *===============*  |           |      *=======*    |        |
@@ -32,7 +32,7 @@ Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
           |      *===============*                                  |        |
          put()                |                                     |        |
           |              side-effects()                             |        |
-          |                   |                                     |        |
+          |                changed()                                |        |
   *=================*         |                                     |        |
   | ST_ACTIVE_DIRTY |<--------*                                     |        |
   |  side-effects() |                                               |        |

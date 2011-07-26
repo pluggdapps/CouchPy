@@ -194,6 +194,7 @@ ST_EVENT_APUT      = 106    # document attach.put() call
 ST_EVENT_ADELETE   = 107    # document attach.delete() call
 ST_EVENT_ATTACH    = 108    # document attach() call
 ST_EVENT_INSTAN    = 109    # Document()
+ST_EVENT_INVALIDATE= 110    # invalidate()
 
 class StateMachine( object ):
 
@@ -237,6 +238,9 @@ class StateMachine( object ):
             newstate = _x_state
 
         doc._x_state = newstate
+
+    def event_invalidate( self, doc, d ):               # ST_EVENT_INVALIDATE
+        doc._x_state = ST_ACTIVE_INVALID
 
     def event_side_effect( self, doc ):                 # ST_EVENT_SIDEEFF
         _x_state = doc._x_state
@@ -322,16 +326,17 @@ class StateMachine( object ):
             
 
     events = {
-        ST_EVENT_INSTAN  : event_instan,
-        ST_EVENT_SIDEEFF : event_side_effect,
-        ST_EVENT_FETCH   : event_fetch,
-        ST_EVENT_POST    : event_post,
-        ST_EVENT_PUT     : event_put,
-        ST_EVENT_DELETE  : event_delete,
-        ST_EVENT_ATTACH  : event_attach,
-        ST_EVENT_AGET    : event_aget,
-        ST_EVENT_APUT    : event_aput,
-        ST_EVENT_ADELETE : event_adelete,
+        ST_EVENT_INSTAN     : event_instan,
+        ST_EVENT_INVALIDATE : event_invalidate,
+        ST_EVENT_SIDEEFF    : event_side_effect,
+        ST_EVENT_FETCH      : event_fetch,
+        ST_EVENT_POST       : event_post,
+        ST_EVENT_PUT        : event_put,
+        ST_EVENT_DELETE     : event_delete,
+        ST_EVENT_ATTACH     : event_attach,
+        ST_EVENT_AGET       : event_aget,
+        ST_EVENT_APUT       : event_aput,
+        ST_EVENT_ADELETE    : event_adelete,
     }
 
 
@@ -453,6 +458,22 @@ class Document( dict ) :
         hthdrs = kwargs.pop( 'hthdrs', {} )
         self._x_hthdrs = self._x_conn.mixinhdrs( self._x_db.hthdrs, hthdrs )
         self._x_query.update( kwargs )
+
+    def changed( self ):
+        """Mark the document as changed. A user of this document should call
+        this method after he or she mutates a mutable object that is a value
+        of the document, which id not done using one of the side-effects
+        method of this class.
+        """
+        self._x_smach.handle_event(ST_EVENT_SIDEEFF, self)
+
+    def invalidate( self ):
+        """If by other means, it is found that the document is no longer the
+        latest version (i.e) the database base version has moved forward, then
+        programmatically invalidate this document so that a side-effect
+        operation will fetch them afresh from the database.
+        """
+        self._x_smach.handle_event(ST_EVENT_INVALIDATE, self)
 
     #---- Dictionary methods that create side-effects
 
