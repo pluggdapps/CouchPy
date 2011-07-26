@@ -42,3 +42,12 @@ Track the project at,
 - __len__ access for Document instance. Optimize it using a view-reduce function.
 
 - How to re-create a deleted document.
+
+- .attach() method uses `_attachments` property of the document to add
+  attachments. For some reason this one fails at the server with message,
+    ServerError:
+    (500, (u'doc_validation', u'Bad special document member: _attachments'))
+
+  Is this supported in 1.0.1 version ?
+
+- For local document copy, source document revision is not being accepted !!

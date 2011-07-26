@@ -112,6 +112,18 @@ def test_basics( url ) :
     for r in result   : assert r['rev'].startswith('2-')
     for docid in docs1: assert docid not in db1
 
+    print "Testing all_docs() method ..."
+    docs1 = {}
+    for i in range(10) :
+        doc = deepcopy(sampledoc)
+        doc['_id'] = doc['_id'] + str(i)
+        docs1[ doc['_id'] ] = doc
+    db.bulkdocs( docs=docs1.values() )
+    ids = sorted( map( lambda d : d['id'], db.all_docs()['rows'] ))
+    assert ids == sorted( docs1.keys() + ['joe'] )
+    ids = sorted( map( lambda d : d['id'], db.all_docs( keys=docs1.keys() )['rows'] ))
+    assert ids == sorted( docs1.keys() )
+
     print "Testing compact() method ..."
     dba.compact()
     assert '_compact' in ca.log( bytes=200 )

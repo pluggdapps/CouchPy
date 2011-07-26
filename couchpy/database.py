@@ -72,6 +72,7 @@ Check for database availability,
 """
 
 import sys, re, logging
+from   copy         import deepcopy
 
 import rest
 from   couchpy      import hdr_acceptjs, hdr_ctypejs, BaseIterator
@@ -593,7 +594,7 @@ class Database( object ) :
         s, h, d = _purge( conn, body, paths, hthdrs=hthdrs )
         return d
 
-    def all_docs( self, keys=None, hthdrs={}, _q={}, **params ) :
+    def all_docs( self, keys=None, hthdrs={}, q={}, **params ) :
         """Return a JSON structure of all of the documents in a given database.
         The information is returned as a JSON structure containing
         meta information about the return structure, and the list documents
@@ -649,7 +650,8 @@ class Database( object ) :
         Admin-prev, No
         """
         conn, paths = self.conn, (self.paths + ['_all_docs'])
-        q = _q if isinstance(_q, Query) else Query( q=_q, **params )
+        q = deepcopy(q)
+        q.update( params )
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_docs( conn, keys=keys, paths=paths, hthdrs=hthdrs, q=q )
         return d

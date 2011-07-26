@@ -203,6 +203,14 @@ class StateMachine( object ):
     def handle_event( self, event, *args, **kwargs ):
         return self.events[event]( self, *args, **kwargs )
 
+    def is_allowed( self, event, doc ):
+        state = doc._x_state
+        if event == ST_EVENT_POST and state == ST_ACTIVE_POST :
+            return True
+        if event == ST_EVENT_PUT and state == ST_ACTIVE_DIRTY :
+            return True
+        return False
+
     def event_instan( self, *args, **kwargs ):      # ST_EVENT_INSTAN
         db, _doc  = args[0:2]
         doc = self.doc
@@ -246,6 +254,7 @@ class StateMachine( object ):
     def event_fetch( self, doc, dbdoc ):                # ST_EVENT_FETCH
         _x_state = doc._x_state
         if _x_state in [ ST_ACTIVE_POST, ST_ACTIVE_INVALID, ST_ACTIVE_VALID ] :
+            doc.clear( _x_dirty=False )
             doc.update( dbdoc, _x_dirty=False )
             newstate = ST_ACTIVE_VALID
         else :
@@ -287,12 +296,12 @@ class StateMachine( object ):
         else :
             raise Exception( 'Document cannot be deleted' )
 
-    def event_attach( self ):                           # ST_EVENT_ATTACH
+    def event_attach( self, doc ):                      # ST_EVENT_ATTACH
         _x_state = doc._x_state
         if _x_state != ST_ACTIVE_POST :
             raise Exception('_attachments can be added only for new documents')
 
-    def event_aget( self ):                             # ST_EVENT_AGET
+    def event_aget( self, doc ):                        # ST_EVENT_AGET
         _x_state = doc._x_state
         if _x_state not in [ST_ACTIVE_DIRTY, ST_ACTIVE_INVALID, ST_ACTIVE_VALID]:
             raise Exception( 'Cannot get attachment for fresh documents' )
@@ -475,10 +484,9 @@ class Document( dict ) :
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.__delitem__( self, key )
 
-    def clear( self ):
-        err = "clear() method on document is not yet supported"
-        log.error( err )
-        raise Exception( err )
+    def clear( self, _x_dirty=True ):
+        self._x_smach.handle_event(ST_EVENT_SIDEEFF, self) if _x_dirty else None
+        return dict.clear( self )
 
     def update( self, *args, **kwargs ):
         _x_dirty = kwargs.pop( '_x_dirty', True )
@@ -497,7 +505,7 @@ class Document( dict ) :
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.popitem( self )
 
-    def __call__( self, hthdrs={}, rev=None, **query ) :
+    def __call__( self, hthdrs={}, **query ) :
         """Behaves like a factory method returning Document instances based on
         the keyword parameters
 
@@ -520,7 +528,7 @@ class Document( dict ) :
         Admin-prev, No
         """
         doc = dict( self.items() )
-        self.__class__( self._x_db, doc, hthdrs=hthdrs, **query )
+        return self.__class__( self._x_db, doc, hthdrs=hthdrs, **query )
 
     def __repr__( self ):
         _id = self.get('_id', None)
@@ -580,6 +588,9 @@ class Document( dict ) :
 
         Admin-prev, No
         """
+        if self._x_smach.is_allowed( ST_EVENT_POST, self ) == False :
+            raise Exception( 'post() not allowed !!' )
+
         conn, paths = self._x_conn, self._x_paths
         # Prune away the document ID from url path. POST will crib on that.
         if paths[-1] == self.get( '_id', None ) :
@@ -637,6 +648,9 @@ class Document( dict ) :
 
         Admin-prev, No
         """
+        if self._x_smach.is_allowed( ST_EVENT_PUT, self ) == False :
+            raise Exception( 'put() is allowed only on dirtied document !!' )
+
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
         doc = dict( self.items() )
@@ -678,10 +692,11 @@ class Document( dict ) :
 
         Return the copied document object
         """
+        conn, paths = self._x_conn, self._x_paths
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev)
         hthdrs = conn.mixinhdrs(self._x_hthdrs, hthdrs, {'Destination' : dest})
         rev = self['_rev']
-        s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, rev=rev )
+        s, h, d = _copydoc( conn, paths, hthdrs=hthdrs, rev=rev )
         if d :
             doc = { '_id' : d['id'], '_rev' : d['rev'] }
             return self.__class__( self._x_db, doc )
@@ -702,17 +717,17 @@ class Document( dict ) :
         ``content_type``,
             File's content type.
         """
-        self._x_smach.handle_event( ST_EVENT_ATTACH ) if d else None
+        self._x_smach.handle_event( ST_EVENT_ATTACH, self )
 
         filename = basename(filepath)
         ctype = content_type if content_type else guess_type(filename)[0]
-        attachments = self['_attachments']
+        attachments = self.get('_attachments', [])
         attachments.append({
-            'filename' : filename,
+            'filename'     : filename,
             'content_type' : ctype,
-            'data' : base64.encodestring( open(filepath).read() ),
+            'data'         : base64.encodestring( open(filepath).read() ),
         })
-        self.update( _attachment=attachments, _x_dirty=False )
+        self.update( _attachments=attachments, _x_dirty=False )
         return self
 
     def attachments( self ) :
@@ -819,7 +834,7 @@ class Attachment( object ) :
         if s != None :
             self.content_type = h.get( 'Content-Type', None )
             self.data = d
-            self.doc._x_smach.handle_event( ST_EVENT_AGET )
+            self.doc._x_smach.handle_event( ST_EVENT_AGET, self.doc )
         return self
 
     def put( self ) :
@@ -882,11 +897,12 @@ class LocalDocument( dict ) :
     """
 
     def __init__( self, db, doc, hthdrs={}, **query ) :
-        _id       = doc['_id']
-        self._x_db, self._x_conn      = db, db.conn
+        doc = {'_id' : doc} if isinstance(doc, basestring) else doc
+        _id = doc['_id']
+        self._x_db, self._x_conn = db, db.conn
         self._x_paths  = db.paths + [ '_local', _id ]
         self._x_hthdrs = self._x_conn.mixinhdrs( db.hthdrs, hthdrs )
-        self._x_query.update( query )
+        self._x_query  = query
 
         dict.__init__( self, doc )
 
@@ -907,7 +923,7 @@ class LocalDocument( dict ) :
             self[name] = value
         return value
 
-    def __call__( self, hthdrs={}, rev=None, **query ) :
+    def __call__( self, hthdrs={}, **query ) :
         """Behaves like a factory method generating LocalDocument instance
         based on the keyword arguments.
         
@@ -929,7 +945,7 @@ class LocalDocument( dict ) :
         Admin-prev, No
         """
         doc = dict( self.items() )
-        self._x_db.LocalDocument( self, doc, hthdrs=hthdrs, **query )
+        return self._x_db.LocalDocument( self, doc, hthdrs=hthdrs, **query )
 
     def fetch( self, hthdrs={}, **query ):      # Local document
         """GET this local document from disk. Always fetch the latest revision of
@@ -954,7 +970,9 @@ class LocalDocument( dict ) :
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
         q      = conn.mixinhdrs( self._x_query, query )
         s, h, ldoc = _getdoc( conn, paths, hthdrs=hthdrs, **q )
-        self.update( ldoc ) if ldoc else None
+        if ldoc :
+            self.clear()
+            self.update( ldoc )
         return self
 
     def put( self, hthdrs={}, **query ) :
@@ -1011,10 +1029,12 @@ class LocalDocument( dict ) :
 
         Return the copied document object
         """
+        conn, paths = self._x_conn, self._x_paths
         dest = toid if asrev == None else "%s?rev=%s" % (toid, asrev)
         hthdrs = conn.mixinhdrs(self._x_hthdrs, hthdrs, {'Destination' : dest})
+        # TODO : `rev` is not being accepted ???
         rev = self['_rev']
-        s, h, d = _copydoc( db.conn, paths, hthdrs=hthdrs, rev=rev )
+        s, h, d = _copydoc( conn, paths, hthdrs=hthdrs )
         if d :
             doc = { '_id' : d['id'], '_rev' : d['rev'] }
             return LocalDocument( self._x_db, doc )
@@ -1126,7 +1146,9 @@ class ImmutableDocument( dict ):
         q.update( self._x_query, rev=self['_rev'] )
         q.update( query )
         s, h, doc = _getdoc( conn, paths, hthdrs=self._x_hthdrs, **q )
-        dict.update( self, doc ) if doc else None
+        if doc :
+            dict.clear( self )
+            dict.update( self, doc )
         return self
 
 
