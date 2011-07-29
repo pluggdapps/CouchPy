@@ -197,14 +197,22 @@ ST_EVENT_INSTAN    = 109    # Document()
 ST_EVENT_INVALIDATE= 110    # invalidate()
 
 class StateMachine( object ):
-
+    """State-machine for every document that is ever instantiated. Operations
+    on document are abstracted into events and the document moves from one
+    state to another based on events.
+    """
     def __init__( self, doc ):
         self.doc = doc
 
     def handle_event( self, event, *args, **kwargs ):
+        """Entry point to handle a document event."""
         return self.events[event]( self, *args, **kwargs )
 
     def is_allowed( self, event, doc ):
+        """A global check that can be used by anyone to figure out whether a
+        particular operation is allowable in the current document's state and
+        then commit the operation.
+        """
         state = doc._x_state
         if event == ST_EVENT_POST and state == ST_ACTIVE_POST :
             return True
@@ -212,7 +220,11 @@ class StateMachine( object ):
             return True
         return False
 
-    def event_instan( self, *args, **kwargs ):      # ST_EVENT_INSTAN
+    def is_dirty( self ):
+        """Check wether the document is in modified state."""
+        return self.doc._x_state == ST_ACTIVE_DIRTY
+
+    def event_instan( self, *args, **kwargs ):          # ST_EVENT_INSTAN
         db, _doc  = args[0:2]
         doc = self.doc
         activedocs = db.singleton_docs['active']
@@ -474,6 +486,9 @@ class Document( dict ) :
         operation will fetch them afresh from the database.
         """
         self._x_smach.handle_event(ST_EVENT_INVALIDATE, self)
+
+    def is_dirty( self ):
+        self._x_smach.is_dirty()
 
     #---- Dictionary methods that create side-effects
 
