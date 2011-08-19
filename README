@@ -3,8 +3,8 @@
 -----
 
 {{{ Nested 
-@ { 'font-size' : 'small', 'color' : 'gray' }
-Document edited using Vim \\ 
+# { 'font-size' : 'small', 'color' : 'gray' }
+Document edited using Vim <br>
 /* vim: set filetype=etx : */
 }}}
 
