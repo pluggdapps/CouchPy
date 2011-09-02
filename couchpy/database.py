@@ -307,7 +307,15 @@ class Database( object ) :
         key-word argument, it will be used for a single request.
     """
 
-    _singleton_docs = {}   # { <dbname>  : { 'active' : {...}, 'cache' : {...} }
+    def __new__( cls, client, dbname, **kwargs ) :
+        """Database instantiater. Database instance are cached under the
+        client object.
+        """
+        self = client.opendbs.get( dbname, None )
+        if not self :
+            self = object.__new__( Database )
+            client.opendbs[dbname] = self
+        return self
 
     def __init__( self, client, dbname, hthdrs={}, **kwargs ) :
         self.client, self.conn = client, client.conn
@@ -323,9 +331,8 @@ class Database( object ) :
         # `active` list. Once commit() method is called on the database
         # instance, all dirty documents will be commited to the server and
         # moved to `cached` list.
-        Database._singleton_docs.setdefault(
-            self.dbname, { 'active' : {}, 'cache' : {} } 
-        )
+        # { <dbname>  : { 'active' : {...}, 'cache' : {...} }
+        self._singleton_docs = { 'active' : {}, 'cache' : {} } 
 
     
     #---- Pythonification of instance methods. They are supposed to be
@@ -730,7 +737,7 @@ class Database( object ) :
     update_seq           = property( _update_seq )
 
     #---- Other properties
-    singleton_docs       = property( lambda self : Database._singleton_docs[self.dbname] )
+    singleton_docs       = property( lambda self : self._singleton_docs )
 
     def put( self, hthdrs={} ) :
         """Create a new database, corresponding to this instance. The database
@@ -782,16 +789,18 @@ class Database( object ) :
         """Call to this method will bulk commit all the active documents that
         are dirtied.
         """
+        from  couchpy.doc       import ST_EVENT_PUT
         activedocs = self.singleton_docs['active'].values()
-        dirtydocs  = filter( lambda d : d._x_dirtied, activedocs )
+        dirtydocs  = filter( lambda d : d.is_dirty(), activedocs )
         result     = self.bulkdocs( dirtydocs )
         # Invoke `_oncommit` callback for documents that were successfully
         # commited
         success = dict([
             (x['id'], x) for x in result if 'id' in x and 'rev' in x
         ])
-        [ doc._oncommit( _rev=success[doc._id]['rev'] )
-          for doc in dirtydocs if doc._id in success.keys() ]
+        succids = success.keys()
+        [ doc._x_smach.handle_event( ST_EVENT_PUT, doc, success[doc._id] )
+          for doc in dirtydocs if doc._id in succids ]
         return result
 
 

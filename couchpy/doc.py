@@ -410,7 +410,7 @@ class Document( dict ) :
     Admin-prev, No
     """
 
-    def __new__( cls, *args, **kwargs ) :
+    def __new__( cls, db, doc, **kwargs ) :
         """Document instantiater. If `_id` is provided, the singleton object
         is lookedup from 'active' list or 'cached' list. If doc is not
         present, a new :class:`couchpy.doc.Document` is instantiated which
@@ -421,18 +421,16 @@ class Document( dict ) :
         :func:`couchpy.doc.Document.post` method is called.
         """
         # Fix `_id` parameter
-        args = list(args)
-        args[1] = {'_id' : args[1]} if isinstance(args[1], basestring) else args[1]
+        doc = { '_id' : doc } if isinstance(doc, basestring) else doc
         #----
-        db, doc = args[:2]
         _id     = doc.get( '_id', None )
         activedocs = db.singleton_docs['active']
         cacheddocs = db.singleton_docs['cache']
 
         # Instantiate document's older revision, ImmutableDocument.
         if _id and 'rev' in kwargs :
-            self = dict.__new__( ImmutableDocument, *args, **kwargs )
-            self.__init__( *args, **kwargs )
+            self = dict.__new__( ImmutableDocument, db, doc, **kwargs )
+            self.__init__( db, doc, **kwargs )
             return self
 
         if _id and _id in activedocs :                      # Document is active
@@ -442,11 +440,11 @@ class Document( dict ) :
             self = cacheddocs[_id]
 
         else :                                         
-            self = dict.__new__( cls, *args, **kwargs )     # Make new instance
+            self = dict.__new__( cls )                      # Make new instance
             self._x_smach = StateMachine( self )
 
         # State machine
-        self._x_smach.handle_event( ST_EVENT_INSTAN, *args, **kwargs )
+        self._x_smach.handle_event( ST_EVENT_INSTAN, db, doc, **kwargs )
 
         # The instance can be in any of the active state.
         return self
@@ -488,7 +486,7 @@ class Document( dict ) :
         self._x_smach.handle_event(ST_EVENT_INVALIDATE, self)
 
     def is_dirty( self ):
-        self._x_smach.is_dirty()
+        return self._x_smach.is_dirty()
 
     #---- Dictionary methods that create side-effects
 
@@ -883,7 +881,7 @@ class Attachment( object ) :
         rev = self.doc['_rev']
         s, h, d = _putattach( conn, paths, self.data, hthdrs=self.hthdrs, rev=rev )
         if d and 'rev' in d :
-            self.doc._x_smach.handle_event( doc, d, ST_EVENT_APUT )
+            self.doc._x_smach.handle_event( ST_EVENT_APUT, self.doc, d )
         return self
 
     def delete( self ) :
@@ -895,7 +893,7 @@ class Attachment( object ) :
         rev = self.doc['_rev']
         s, h, d = _deleteattach( conn, paths, hthdrs=self.hthdrs, rev=rev )
         if d and 'rev' in d :
-            self.doc._x_smach.handle_event( self.doc, d, ST_EVENT_ADELETE )
+            self.doc._x_smach.handle_event( ST_EVENT_ADELETE, self.doc, d )
         return self
 
 

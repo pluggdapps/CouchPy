@@ -328,7 +328,8 @@ class Client( object ) :
         self.available = None
         # Load the saved cookie to preserve the authentication
         cookie != None and self.conn.savecookie( self.hthdrs, cookie )
-        self._authsession = None
+        self._authsession, self.opendbs = None, {}
+        # Database cache
 
     #---- Pythonification of instance methods. They are supposed to be
     #---- wrappers around the actual API.
@@ -670,6 +671,13 @@ class Client( object ) :
     def DatabaseIterator( self, regexp=None ):
         from   database     import DatabaseIterator
         return DatabaseIterator( self, values=self.all_dbs(), regexp=regexp )
+
+
+    def commit( self ):
+        """Call to this method will bulk commit all the active documents
+        (dirtied) under every open database for this client.
+        """
+        [ db.commit() for dbname, db in self.opendbs.items() ]
 
     #---- Place holder API methods
 
