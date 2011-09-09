@@ -529,7 +529,7 @@ class Document( dict ) :
 
     def setdefault( self, key, *args ):
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
-        return dict.setdefault( self, key *args )
+        return dict.setdefault( self, key, *args )
 
     def pop( self, key, *args ):
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )

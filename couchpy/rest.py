@@ -150,11 +150,11 @@ class ReSTful( Helpers, object ) :
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
         st = time.time()    # Debog code
-        log.info( "%6s %s %s" % (method, (time.time()-st), url) )
         resp = self.htsession.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
                )
+        log.info( "%6s %s %s (%s)" % (method, (time.time()-st), url, resp[0]) )
         return resp
 
 

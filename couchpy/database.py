@@ -312,7 +312,7 @@ class Database( object ) :
         client object.
         """
         self = client.opendbs.get( dbname, None )
-        if not self :
+        if self == None :
             self = object.__new__( Database )
             client.opendbs[dbname] = self
         return self
