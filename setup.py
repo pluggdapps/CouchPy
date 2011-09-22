@@ -14,7 +14,7 @@ v = open(join(dirname(__file__), 'couchpy', '__init__.py'))
 version = re.compile(r".*__version__[ ]*=[ ]*'(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
-description="Data modeling CouchDB database management systems"
+description="Data modeling for CouchDB database management systems"
 
 classifiers=[
 'Development Status :: 4 - Beta',

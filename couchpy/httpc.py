@@ -1,11 +1,13 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2009 Christopher Lenz
+# Copyright (C) 2010 Pratap Chakravarthy
+
+# -*- coding: utf-8 -*-
+
 """Simple HTTP client implementation based on the ``httplib`` module in the
 standard library.
 """
-
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# Derived from, Christopher Lenz's couchdb-python
 
 
 # TODO :

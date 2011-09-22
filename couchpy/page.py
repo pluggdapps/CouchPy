@@ -1,12 +1,28 @@
+# CouchPy Couchdb data-modeling for CouchDB database management systems
+#   Copyright (C) 2011  SKR Farms (P) LTD
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# -*- coding: utf-8 -*-
+
 """Some times many entries in a view have the same key value. To differentiate
 among such entries use doc-id. Note key and doc-id will be different in such
 cases and don't expect doc-id to be in sort order
 """
 
-import time
-from    copy            import deepcopy
-
-from    couchpy.doc     import DesignDocument, Query, View
+from copy            import deepcopy
+from couchpy.doc     import View
 
 # Gotcha :
 #   1. There is a big gotcha that seems to be present in Python. That is, when

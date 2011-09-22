@@ -71,13 +71,31 @@ Check for database availability,
 >>> bool( db )
 """
 
-import sys, re, logging
+# CouchPy Couchdb data-modeling for CouchDB database management systems
+#   Copyright (C) 2011  SKR Farms (P) LTD
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# -*- coding: utf-8 -*-
+
+import re, logging
 from   copy         import deepcopy
 
 import rest
 from   couchpy      import hdr_acceptjs, hdr_ctypejs, BaseIterator
 from   httperror    import *
-from   httpc        import HttpSession, ResourceNotFound, OK, CREATED, ACCEPTED
+from   httpc        import OK, CREATED, ACCEPTED
 from   doc          import Document, LocalDocument, DesignDocument, Query
 
 log = logging.getLogger( __name__ )

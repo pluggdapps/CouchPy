@@ -1,14 +1,9 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# Derived from, couchdb-python, written by Christopher Lenz
-#
+
 # Copyright (C) 2009 Christopher Lenz
 # Copyright (C) 2010 Pratap Chakravarthy
-# All rights reserved.
-#
-# This software is licensed as described in the file COPYING, which
-# you should have received as part of this distribution.
+
+# -*- coding: utf-8 -*-
 
 class HTTPError(Exception):
     """Base class for errors based on HTTP status codes >= 400."""

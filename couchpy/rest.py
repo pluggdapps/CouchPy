@@ -1,22 +1,30 @@
 #!/usr/bin/env python
+
+# CouchPy Couchdb data-modeling for CouchDB database management systems
+#   Copyright (C) 2011  SKR Farms (P) LTD
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 # -*- coding: utf-8 -*-
 
-# This file is subject to the terms and conditions defined in
-# file 'LICENSE', which is part of this source code package.
-#       Copyright (c) 2010 SKR Farms (P) LTD.
-
-# TODO :
-#   1. Instead of using python based json, it would be great to use c-based
-#      implementation
-
-import urllib, logging, sys, time
+import urllib, logging, time
 from   copy             import deepcopy
 from   urlparse         import urlsplit, urlunsplit
-from   StringIO         import StringIO
 
 from   couchpy.mixins   import Helpers
 from   couchpy.json     import JSON
-import couchpy.httpc
+import couchpy.httpc    as httpc
 
 log = logging.getLogger( __name__ )
 
