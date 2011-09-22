@@ -57,7 +57,7 @@ Copy document,
 
 """
 
-import sys, re, json, time, logging, base64
+import sys, re, time, logging, base64
 from   os.path      import basename
 from   copy         import deepcopy
 from   StringIO     import StringIO

@@ -11,16 +11,18 @@ standard library.
 # TODO :
 #   1. Document this module
 
-import sys, socket, time, errno, urllib, json, logging
-from   urlparse  import urlsplit, urlunsplit
-from   base64    import b64encode
-from   datetime  import datetime
-from   httplib   import BadStatusLine, HTTPConnection, HTTPSConnection
+import sys, socket, time, errno, urllib, logging
+from   urlparse         import urlsplit, urlunsplit
+from   base64           import b64encode
+from   datetime         import datetime
+from   httplib          import BadStatusLine, HTTPConnection, HTTPSConnection
+
+from   couchpy.json     import JSON
 
 try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO  import StringIO
+    from cStringIO      import StringIO
+except ImportError:    
+    from StringIO       import StringIO
 
 try:
     from threading       import Lock
@@ -126,6 +128,7 @@ class HttpSession( object ) :
         headers = headers or {}
         basicauth = self.basicauth( credentials ) if credentials else None
         retries = iter(self.retry_delays)
+        json    = JSON()
 
         if method not in self._allowed_methods :
             raise HTTPError( 'Method ``%s`` not allowed' % method )
@@ -184,7 +187,7 @@ class HttpSession( object ) :
         if status >= BAD_REQUEST :  # 400
             ctype = resp.getheader('content-type')
             if data is not None and 'application/json' in ctype:
-                data = json.load( StringIO(data) )
+                data = json.decode( data )
                 error = data.get('error'), data.get('reason')
             elif method != 'HEAD':
                 error = resp.read()
@@ -269,12 +272,8 @@ class HttpSession( object ) :
         # JSON body
         if body and (not isinstance( body, basestring ) ) :
             s = StringIO()
-            try :
-                json.dump( body, s )
-                s.seek(0)
-                body = s.read()
-            except TypeError :
-                pass
+            try : body = json.encode( body )
+            except TypeError : pass
             headers.setdefault('Content-Type', 'application/json')
         # Content-length, Transfer-Encoding
         headers.setdefault( 'Content-Length', '0' ) if body is None else None

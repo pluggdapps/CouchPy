@@ -6,16 +6,16 @@
 #       Copyright (c) 2010 SKR Farms (P) LTD.
 
 # TODO :
-#   1. While json.loads(), provision for max_depth can help in optimization.
-#   2. Instead of using python based json, it would be great to use c-based
+#   1. Instead of using python based json, it would be great to use c-based
 #      implementation
 
-import urllib, json, logging, sys, time
+import urllib, logging, sys, time
 from   copy             import deepcopy
 from   urlparse         import urlsplit, urlunsplit
 from   StringIO         import StringIO
 
 from   couchpy.mixins   import Helpers
+from   couchpy.json     import JSON
 import couchpy.httpc
 
 log = logging.getLogger( __name__ )
@@ -55,7 +55,7 @@ class ReSTful( Helpers, object ) :
 
     def _jsonloads( self, hdr, data ) :
         if 'application/json' in hdr.get( 'content-type', '' ) :
-            data = json.loads( data.getvalue() )
+            data = JSON().decode( data.getvalue() )
         return data
 
     def head( self, paths, hdrs, body, _query=[] ) :
@@ -231,7 +231,4 @@ def _normalize( val ) :
     if val == False : return 'false'
 
 def data2json( data ) :
-    buf = StringIO()
-    json.dump({}, buf) if data == None else json.dump(data, buf)
-    x = buf.getvalue()
-    return x
+    return JSON().encode( data or {} )
