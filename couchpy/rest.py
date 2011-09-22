@@ -16,7 +16,7 @@ from   urlparse         import urlsplit, urlunsplit
 from   StringIO         import StringIO
 
 from   couchpy.mixins   import Helpers
-import httpc
+import couchpy.httpc
 
 log = logging.getLogger( __name__ )
 

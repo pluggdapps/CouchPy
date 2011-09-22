@@ -1,6 +1,8 @@
 * Use GPLv3 copyright header for all source files.
 * For source doc, use class.__doc__ instead of __init__.doc for constructor
   explanation.
+* If python-cjson is available, it will be used, otherwise, python standard
+  library is used.
 
 -----
 

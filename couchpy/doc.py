@@ -67,7 +67,6 @@ import rest
 from   httperror    import *
 from   httpc        import HttpSession, ResourceNotFound, OK, CREATED, ACCEPTED
 from   couchpy      import CouchPyError, hdr_acceptjs, hdr_ctypejs
-from   mixins       import MixinDoc
 
 # TODO :
 #   1. Batch mode POST / PUT should have a verification system built into it.
