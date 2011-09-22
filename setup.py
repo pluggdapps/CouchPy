@@ -14,7 +14,7 @@ v = open(join(dirname(__file__), 'couchpy', '__init__.py'))
 version = re.compile(r".*__version__[ ]*=[ ]*'(.*?)'", re.S).match(v.read()).group(1)
 v.close()
 
-description="Client library in Python interfacing with CouchDB's ReSTful API"
+description="Data modeling CouchDB database management systems"
 
 classifiers=[
 'Development Status :: 4 - Beta',
@@ -84,5 +84,5 @@ setup(
     long_description=README,
     platforms='',
     classifiers=classifiers,
-    keywords=[ 'wiki documentation parser ply' ],
+    keywords=[ 'ORM database couchdb nosql modeling' ],
 )

@@ -1,0 +1,12 @@
+* Use GPLv3 copyright header for all source files.
+* For source doc, use class.__doc__ instead of __init__.doc for constructor
+  explanation.
+
+-----
+
+{{{ Nested 
+# { 'font-size' : 'small', 'color' : 'gray' }
+Document edited using Vim <br>
+/* vim: set filetype=etx : */
+}}}
+
