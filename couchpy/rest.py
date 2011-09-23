@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # CouchPy Couchdb data-modeling for CouchDB database management systems
 #   Copyright (C) 2011  SKR Farms (P) LTD
 # 
@@ -22,43 +20,47 @@ import urllib, logging, time
 from   copy             import deepcopy
 from   urlparse         import urlsplit, urlunsplit
 
-from   couchpy.mixins   import Helpers
 from   couchpy.json     import JSON
-import couchpy.httpc    as httpc
 
 log = logging.getLogger( __name__ )
 
-class ReSTful( Helpers, object ) :
-    """
-    Class definition along with the HttpSession to interface a HTTP server
-    using ReST-ful (Representational State Transfer) design. If http-header
-    `Accept` has only `application/json` as the value, then reponse data will
-    be converted from json to python object.
+class ReSTful( object ) :
+    """ReST-ful (Representational State Transfer) interface to CouchDB server.
+    Uses a httpclient session and provides method APIs for rest of the
+    couchpy modules. If http-header ``Accept`` has only ``application/json`` as
+    the value, then reponse data will be converted from json to python
+    object.
 
-    url, 
-        base url to be used to compose the full resource-url
-    htsess,
+    Constructor arugments,
+
+    ``url``, 
+        base url to be used to compose the full resource-url. url can contain
+        credential information as <username>:<password>
+    ``htsess``,
         HttpSession object for clientside connection. If not supplied, a
-        new instance will be created and remembered until the life of this
-        instance.
-    headers,
+        new instance will be created and remembered until this instance gets
+        garbage-collected.
+    ``headers``,
         dictionary of http-headers that will be used for all http-request
-        made my this object.
+        made my this object. The header fields supplied here are overridable
+        in method APIs.
     """
 
     def __init__( self, url, htsess, headers=None ) :
         self.url, self.credentials = _extract_credentials(url)
-        self.htsession = httpc.HttpSession() if htsess is None else htsess
+        self.htsess = htsess or self._httpsession()
         self.headers = headers or {}
         self.is_jsonresp = headers.get('Accept', '') == 'application/json'
 
-    def __call__( self, *path ) :
+    def __call__( self, *path, **kwargs ):
+        """Return a clone of this object, with more specific url path-info, an
+        optional http-session ``htsess`` and an optional set of ``headers``.
         """
-        Return a clone of this object, with more specific url path-info.
-        """
-        obj = type(self)( urljoin(self.url, *path), self.htsession )
+        obj = type(self)( urljoin(self.url, *path),
+                          kwargs.get( 'htsess', self.htsess ),
+                          kwargs.get( 'headers', deepcopy(self.headers) )
+                        )
         obj.credentials = deepcopy( self.credentials )
-        obj.headers = deepcopy( self.headers )
         return obj
 
     def _jsonloads( self, hdr, data ) :
@@ -66,99 +68,19 @@ class ReSTful( Helpers, object ) :
             data = JSON().decode( data.getvalue() )
         return data
 
-    def head( self, paths, hdrs, body, _query=[] ) :
-        """
-        HEAD request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('HEAD', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d ) if d != None else d
-        return s, h, d
-
-    def get( self, paths, hdrs, body, _query=[] ) :
-        """
-        GET request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('GET', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
-        return s, h, d
-
-    def post( self, paths, hdrs, body, _query=[] ) :
-        """
-        POST request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('POST', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
-        return s, h, d
-
-
-    def put( self, paths, hdrs, body, _query=[] ) :
-        """
-        PUT request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('PUT', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
-        return s, h, d
-
-    def delete( self, paths, hdrs, body, _query=[] ) :
-        """
-        DELETE request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('DELETE', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
-        return s, h, d
-
-    def copy( self, paths, hdrs, body, _query=[] ) :
-        """
-        COPY request with hdrs and body, for resource specified by 
-        base-url (provided while instantiation) and path. Optional _query,
-        which is list of key,value tuples to construct url-query, http headers
-        along with request content.
-
-        Returns,
-            status, headers, data
-        """
-        s, h, d = self._request('COPY', paths, hdrs, body, _query)
-        d = self._jsonloads( h, d )
-        return s, h, d
+    def _httpsession( self ):
+        import couchpy.httpc
+        return httpc.HttpSession()
 
     def _request( self, method, paths, headers, body, _query ):
-        all_headers = deepcopy( self.headers )
-        all_headers.update( headers or {} )
+        if isinstance(headers, dict) :
+            all_headers = deepcopy( self.headers )
+            all_headers.update( headers )
         paths = paths.split('/') if isinstance( paths, basestring ) else paths
         paths = filter( None, paths )
         url = urljoin( self.url, *paths, _query=_query )
-        st = time.time()    # Debog code
-        resp = self.htsession.request(
+        st = time.time()
+        resp = self.htsess.request(
                     method, url, body=body, headers=all_headers,
                     credentials=self.credentials
                )
@@ -166,9 +88,117 @@ class ReSTful( Helpers, object ) :
         return resp
 
 
-def urljoin( base, *path, **kwargs ) :
-    """Assemble a uri based on a base, any number of path segments, and
-    query key-word argument. query, is a list of key,value tuples.
+    #---- HTTP method requests.
+
+    def head( self, paths, hdrs, body, _query=[] ) :
+        """HEAD request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('HEAD', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d ) if d != None else d
+        return s, h, d
+
+    def get( self, paths, hdrs, body, _query=[] ) :
+        """GET request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('GET', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d )
+        return s, h, d
+
+    def post( self, paths, hdrs, body, _query=[] ) :
+        """POST request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('POST', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d )
+        return s, h, d
+
+
+    def put( self, paths, hdrs, body, _query=[] ) :
+        """PUT request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('PUT', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d )
+        return s, h, d
+
+    def delete( self, paths, hdrs, body, _query=[] ) :
+        """DELETE request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('DELETE', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d )
+        return s, h, d
+
+    def copy( self, paths, hdrs, body, _query=[] ) :
+        """COPY request with http-headers ``hdrs`` and ``body``, for resource
+        specified by base-url (provided while instantiation) and a list of
+        path-segments ``paths``. Optional ``_query``, which is list of
+        key,value tuples to construct url-query.
+
+        Returns,
+            HTTP response - status, headers, data
+        """
+        s, h, d = self._request('COPY', paths, hdrs, body, _query)
+        d = self._jsonloads( h, d )
+        return s, h, d
+
+
+    #---- Helper methods for couchpy modules that are related to framing HTTP
+    #---- request.
+
+    def savecookie( self, hthdrs, simplecookie ) :
+        """Save ``simplecookie`` into http-request-headers ``hthdrs`` and
+        return the same. ``hthdrs`` is expected to be a dictionary like object
+        and ``simplecookie`` is expected by a cookie.SimpleCookie instance.
+        """
+        x = [ hthdrs.get( 'Set-Cookie', hthdrs.get( 'set-cookie', '' )) ]
+        cookies = filter( None, x )
+        for name, morsel in simplecookie.items() :
+            cookies.append( '%s=%s' %  (name, morsel.value) )
+        hthdrs['Cookie'] = ', '.join(cookies)
+        return hthdrs
+
+    def mixinhdrs( self, *hthdrs ) :
+        newhthdrs = dict()
+        [ newhthdrs.update(h) for h in hthdrs ]
+        return newhthdrs
+
+
+def urljoin( base, *paths, **kwargs ) :
+    """Assemble a uri based on a base-url, any number of path segments
+    ``paths``, and query key-word argument ``_query``, which is a list of
+    key,value tuples.  Each path-segment in ``paths`` will be quoted using
+    ``urllib.quote``. If value in _query (key,value) is a list or tuple, like,
+    (key, [1,2,3]) will be expanded to [ (key,1), (key,2), (key,3) ]. Unicode
+    query parameter values will be encoded in 'utf-8'. And the entire query
+    string will be quoted using ``urllib.quote``
 
     >>> urljoin('http://example.org', '_all_dbs')
     'http://example.org/_all_dbs'
@@ -188,15 +218,14 @@ def urljoin( base, *path, **kwargs ) :
     base = base[:-1] if base and base.endswith('/') else base
     _query = kwargs.get( '_query', [] )
 
-    # build the path
-    path = '/'.join([ _quote(s) for s in path if s ])
-    url = '/'.join([ base, path ])
+    # build pathinfo
+    pathinfo = '/'.join( _quote(s) for s in paths if s )
+    url = '/'.join([ base, pathinfo ])
 
     # build the query string
     params = []
     for name, value in _query :
         value = value if type(value) in (list, tuple) else [value]
-        fn = lambda x : ( name, _normalize(x) )
         params.extend( map( lambda x : (name, x), filter(None, value) ))
     url = '?'.join([ url, _urlencode(params) ]) if params else url
     return url
@@ -215,12 +244,12 @@ def _extract_credentials( url ) :
     """
     parts = urlsplit(url)
     netloc = parts[1]
-    credentials = None
-    if '@' in netloc :
+    try :
         creds, netloc = netloc.split('@')
-        credentials = tuple(urllib.unquote(i) for i in creds.split(':'))
-        parts = list(parts)
-        parts[1] = netloc
+        credentials = tuple( urllib.unquote(i) for i in creds.split(':') )
+        parts = [ parts[0] ] + [ netloc ] + parts[2:]
+    except :
+        credentials = None
     return urlunsplit(parts), credentials
 
 def _quote( s, safe='' ) :
@@ -233,10 +262,6 @@ def _urlencode( data ) :
     params = [ (name, fn(value)) for name, value in data ]
     query = '&'.join([ '%s=%s'%(k,v) for k, v in  params ])
     return urllib.quote(query, '&=\'"')
-
-def _normalize( val ) :
-    if val == True : return 'true'
-    if val == False : return 'false'
 
 def data2json( data ) :
     return JSON().encode( data or {} )
