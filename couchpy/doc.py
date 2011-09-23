@@ -577,7 +577,7 @@ class Document( dict ) :
         Admin-prev, No
         """
         doc = dict( self.items() )
-        return self.__class__( self._x_db, doc, hthdrs=hthdrs, **query )
+        return type(self)( self._x_db, doc, hthdrs=hthdrs, **query )
 
     def __repr__( self ):
         _id = self.get('_id', None)
@@ -748,7 +748,7 @@ class Document( dict ) :
         s, h, d = _copydoc( conn, paths, hthdrs=hthdrs, rev=rev )
         if d :
             doc = { '_id' : d['id'], '_rev' : d['rev'] }
-            return self.__class__( self._x_db, doc )
+            return type(self)( self._x_db, doc )
         else :
             return None
 
