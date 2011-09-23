@@ -5,15 +5,9 @@
 
 # -*- coding: utf-8 -*-
 
-"""Simple HTTP client implementation based on the ``httplib`` module in the
-standard library.
-"""
+"""HTTP client wrapper around stdlib's ``httplib`` module."""
 
-
-# TODO :
-#   1. Document this module
-
-import sys, socket, time, errno, urllib, logging
+import sys, socket, time, errno, logging
 from   urlparse         import urlsplit, urlunsplit
 from   base64           import b64encode
 from   datetime         import datetime
@@ -34,8 +28,6 @@ except ImportError:
 from   httperror import *
 
 log = logging.getLogger( __name__ )
-
-__all__ = [ 'Session' ]
 
 CHUNK_SIZE = 1024 * 8
 CACHE_SIZE = 10, 75         # some random values to limit memory use

@@ -17,8 +17,8 @@
 # -*- coding: utf-8 -*-
 
 """Encoding python object to JSON text and decoding JSON text to python object
-using the fastest available implementation, searches for the following
-implementation in the listed order priority.
+using the fastest available implementation. Searches for following
+implementation in the listed order of priority.
     python-cjson    C implementation of JSON encoder and decoder
     json            JSON encoder and decoder from python standard-library
 """
