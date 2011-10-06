@@ -16,6 +16,9 @@
 
 # -*- coding: utf-8 -*-
 
+import logging
+from   couchpy.utils     import ConfigDict
+
 __version__ = '0.1dev'
 
 hdr_acceptjs  = { 'Accept' : 'application/json' }
@@ -23,6 +26,39 @@ hdr_accepttxtplain = { 'Accept' : 'text/plain' }
 hdr_acceptany      = { 'Accept' : '*/*' }
 hdr_ctypejs   = { 'Content-Type' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
+
+defconfig = ConfigDict()
+defconfig['realm']             = {
+    'default' : 'http://localhost:5984',
+    'types'   : (str,),
+    'help'    : "CouchDB HTTP-API URL. A single couchdb instance is considered "
+                "as a realm."
+}
+defconfig['userdb.name']       = {
+    'default' : '_users',
+    'types'   : (str,),
+    'help'    : "CouchDB user database for authentication and other user "
+                "administration"
+}
+defconfig['couch_httpd_auth.timeout']  = {
+    'default' : 10000000,
+    'types'   : (int,),
+    'help'    : "How long authenticated session should be preserved before "
+                "timing-out."
+}
+defconfig['uuids.algorithm']   = {
+    'default' : 'utc_random',
+    'types'   : (str,),
+    'help'    : "Algorithm to generate universally unique identifiers for "
+                "documents."
+}
+defconfig['cookie.name']       =  {
+    'default' : 'AuthSession',
+    'types'   : (str,),
+    'help'    : "Cookie name to store user-authentacation. The name must be "
+                "same as that used by couchdb API."
+}
+
 
 class CouchPyError( Exception ) :
     """Raise an error because of failure detected in CouchPy library code."""

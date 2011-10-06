@@ -17,12 +17,7 @@ Contents
    modules/client.rst
    modules/database.rst
    modules/doc.rst
-   modules/designdoc.rst
-   modules/attachment.rst
-   modules/query.rst
-   modules/view.rst
-   modules/httpc.rst
-   modules/httperror.rst
+   modules/utils.rst
    modules/rest.rst
    future
 

@@ -27,7 +27,7 @@ log = logging.getLogger( __name__ )
 
 def test_info( url ) :
     print "Testing client ..."
-    c = Client( url=url, full_commit=True )
+    c = Client( url=url )
     assert c.url, url
 
     # __nonzero__
@@ -37,21 +37,21 @@ def test_info( url ) :
 
 def test_basics( url ) :
     print "Testing client in python way ..."
-    c = Client( url=url, debug=True )
-    ca = Client( url=url, debug=True )
+    c = Client( url=url )
+    ca = Client( url=url )
     ca.login( 'pratap', 'pratap' )
 
     ca.delete('testdb1') if 'testdb1' in ca else None
     ca.delete('testdb2') if 'testdb2' in ca else None
+    ca.delete('testdb3') if 'testdb3' in ca else None
 
-    print "Testing put() method ..."
+    print "Testing put() ..."
     ca.put('testdb1')
     ca.put('testdb2')
 
     print "Testing __contains__ operation ..."
     assert 'testdb1' in c
     assert 'testdb2' in c
-    assert 'testdb3' not in c
     
     print "Testing __iter__ operation ..."
     databases = sorted([ db.dbname for db in c ])
@@ -148,7 +148,7 @@ def test_basics( url ) :
 
 if __name__ == '__main__' :
     url = 'http://localhost:5984/'
-    c = Client( url=url, debug=True )
+    c = Client( url=url )
     print 'CouchDB version %s' % c.version()
     test_info( url )
     test_basics( url )

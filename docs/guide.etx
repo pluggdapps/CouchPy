@@ -1,0 +1,41 @@
+h3. Reference
+
+: mandatory keys in document ::
+    ''_id'', ''_rev'' are mandatory keys for evey document and are central to
+    the way database system works.
+: conflicts ::
+    By design couchdb allows conflicts in documents. This is kind of
+    inevitable for a DBMS that wants to support offline, master-master
+    replication. couchdb uses //Multi-Version-Concurrency-Control// (MVCC) to
+    manage such conflicts.
+: base revision ::
+    As of now couchdb documents ''does not provide base-revisions'' to handle
+    document merges.
+: updating documents ::
+    Existing document in database can be updated only when the submited
+    version of the document and the existing version agrees on the
+    //current-revision//.
+: generating UUIDs ::
+    It is recommended to assign your own UUIDs for documents. If you rely on
+    the server to generate the UUID and you end up making two POST requests
+    because the first POST request bombed out, you might generate two docs and
+    never find out about the first one because only the second one will be
+    reported back. Generating your own UUIDs makes sure that you’ll never end
+    up with duplicate documents. 
+    As part of DBMS design, there are few key,value pairs that are directly
+    interpreted by CouchDB. These keys will always start with an '' _ ''
+    character. As much as possible avoid naming document keys starting with an
+    //underscore//. Here is a non-exhausitve collection of special keys found
+    inside db documents.
+
+: _id ::
+    Every document is to be uniquely identifiable inside a single database. In
+    other words, no two documents can have same value of its _id key.
+: _rev ::
+    Document revision, made up of two parts //<revision>-<hash>//, where
+    //<revision>// is an integral value that gets incremented for every local
+    updates to the document and //<hash>// values are unique for every
+    document content. (i.e) same document with different contents will not have
+    same //<hash>// value.
+
+h3. Multi version concurrency control

@@ -1,73 +1,90 @@
 """Database definition for accessing a CouchDB database. An instance of
 :class:`Database` class corresponds to a single database in CouchDB server,
-the object can be used to interface with it. Aside from that,
-:class:`Database` objects provide pythonified way of accessing it.
+and the object can be used to read, write, update its documents and query
+views. Also, :class:`Database` objects provide pythonified way of accessing
+them.
 
 Create a database,
 
 >>> couch = Client()
->>> db = couch.put('contacts')  # Create
+>>> db = couch.put('contacts')             # Create
+>>> db = couch.Database('contacts').put()  # Alternate way to create database
+>>> db = couch.Database('contacts')        # Access database
 
 Example list of operations that can be done with :class:`Database` instance :
 
 Get database information,
+
 >>> db.info
 { ... }
 
-Create a database,
->>> db = couch.Database('blog').put()
+Delete database,
 
-Delete the database,
 >>> db.delete()
 
-Track changes done to database,
+Track changes done to database, changes() methods accept a whole bunch of
+keyword arguments that are accepted as query arguments to DB API.
+
 >>> db.changes()
 
-Compact database,
+Compact database, if optional argument designdoc is specified, all views
+associated with design-doc will be compacted.
+
 >>> db.compact()
+>>> db.compact(designdoc='views')
 
 View cleanup,
+
 >>> db.viewcleanup()
 
 Ensure full commit,
+
 >>> db.ensurefullcommit()
 
 Bulk document inserts,
+
 >>> docs = [ {'fruit' : 'orange'}, {'fruit' : 'apple'} ]
 >>> db.bulkdocs( docs )
 >>> db.bulkdocs( docs, atomic=True )
 
 Get / Set security object,
+
 >>> db.security({ "admins" : { "names" : ["joe"] } })
 >>> db.security()
 {u'admins': {u'names': [u'pratap']}}
 
 Get / Set revs_limit
+
 >>> db.revslimit( 122 )
 >>> db.revslimit()
 122
 
 Iterate over all the documents in the database. The following example emits a
 list of document ids.
+
 >>> docs = [ doc for doc in db ]
 [u'011b9da9723dea64c645554bcf0261619efd68a1',
- u'05ee18cc4b79572594aea1d71253d71538609597',
- ...
+u'05ee18cc4b79572594aea1d71253d71538609597',
+...
 ]
 
 Access the document like database dictionary,
+
 >>> u'011b9da9723dea64c645554bcf0261619efd68a1' in db
 True
 >>> db[u'011b9da9723dea64c645554bcf0261619efd68a1']
 <Document u'011b9da9723dea64c645554bcf0261619efd68a1':u'1-16565128019675206d77f6836039af0e'>
 
 Remove document from database
+
 >>> del db[u'011b9da9723dea64c645554bcf0261619efd68a1']
 
-Number documents stored in the database,
+Number of documents stored in the database,
+
 >>> len(db)
 
 Check for database availability,
+
 >>> bool( db )
 """
 
@@ -93,10 +110,11 @@ import re, logging
 from   copy         import deepcopy
 
 import rest
-from   couchpy      import hdr_acceptjs, hdr_ctypejs, BaseIterator
-from   httperror    import *
-from   httpc        import OK, CREATED, ACCEPTED
-from   doc          import Document, LocalDocument, DesignDocument, Query
+from   couchpy          import hdr_acceptjs, hdr_ctypejs, BaseIterator
+from   httperror        import *
+from   httpc            import OK, CREATED, ACCEPTED
+from   doc              import Document, LocalDocument, DesignDocument, Query
+from   couchpy.utils    import JSON
 
 log = logging.getLogger( __name__ )
 
@@ -130,16 +148,26 @@ def _deletedb( conn, paths=[], hthdrs={} ) :
         log.error( 'DELETE request to /%s failed' % '/'.join(paths) )
         return (None, None, None)
 
-def _changes( conn, paths=[], hthdrs={}, **query ) :
+def _changes( conn, paths=[], hthdrs={}, chunk_cb=None, **query ) :
     """GET /<db>/_changes
     query,
         feed=normal | continuous | longpoll
-        filter=<design-doc>/<func-name>     heartbeat=<milliseconds>
-        include_docs=<bool>                 limit=<number>
-        since=<seq-num>                     timeout=<millisecond>
+        filter=<design-doc>/<func-name> heartbeat=<milliseconds>
+        include_docs=<bool>             limit=<number>
+        since=<seq-num>                 timeout=<millisecond>
     """
+    decode = JSON().decode
+    def callback( line ):
+        if chunk_cb and line == '\n' :
+            chunk_cb( line )
+        elif chunk_cb and line :
+            chunk_cb( decode(line) )
+        else :
+            return ''
+    #---- Fix boolean query parameters
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
-    s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
+    s, h, d = conn.get( paths, hthdrs, None, _query=query.items(),
+                        chunk_cb=(chunk_cb and callback or None))
     if s == OK :
         return s, h, d
     else :
@@ -314,10 +342,6 @@ class Database( object ) :
 
     Optional arguments :
 
-    ``debug``, 
-        for enhanced logging, if not specified, client's `debug` attribute
-        will be used.
-
     ``hthdrs``,
         Dictionary of HTTP request headers. The header fields and values
         will be remembered for every request made via this ``database``
@@ -326,8 +350,13 @@ class Database( object ) :
     """
 
     def __new__( cls, client, dbname, **kwargs ) :
-        """Database instantiater. Database instance are cached under the
-        client object.
+        """Database instantiater providing singleton pattern for Database
+        objects. Database instance are cached under the client object, and
+        every instantiation
+
+        >>> Database( 'dbname' )
+
+        will return the same object.
         """
         self = client.opendbs.get( dbname, None )
         if self == None :
@@ -338,12 +367,10 @@ class Database( object ) :
     def __init__( self, client, dbname, hthdrs={}, **kwargs ) :
         self.client, self.conn = client, client.conn
         self.dbname = Database.validate_dbname( dbname )
-        self.debug = kwargs.pop( 'debug', client.debug )
         self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
 
         self.paths = client.paths + [ dbname ]
         self._info = {}
-        self.hthdrs = self.conn.mixinhdrs( self.client.hthdrs, hthdrs )
 
         # Every time a Document object is instantiated it will be moved to the
         # `active` list. Once commit() method is called on the database
@@ -361,7 +388,7 @@ class Database( object ) :
         from CouchDB reference manual to know the structure of information.
         Every time the object is called, database information will be fetched
         from the server. For efficiency reasons, access database information
-        via `info` attribute, which will fetch the information only once and
+        via ``info`` attribute, which will fetch the information only once and
         cache them for subsequent use.
 
         Admin-Prev, No
@@ -381,7 +408,7 @@ class Database( object ) :
 
     def __getitem__( self, key ) :
         """Return a :class:`couchpy.doc.Document` instance, for the document
-        specified by ``key`` which is document's `_id`.
+        specified by ``key`` which is document's ``_id``.
 
         Admin-prev, No
         """
@@ -428,30 +455,48 @@ class Database( object ) :
     #---- API methods for database
 
     def ispresent( self ) :
-        """Return a boolean, on database availability in the server."""
+        """Boolean, whether database is present in the server."""
         try :
             return bool( self() )
         except :
             return False
 
-    def changes( self, hthdrs={}, **query ) :
+    def changes( self, hthdrs={}, callback=None, **query ) :
         """Obtain a list of changes done to the database. This can be
-        used to monitor for update and modifications to the database for post
+        used to monitor modifications done on the database for post
         processing or synchronization. Returns JSON converted changes objects,
         and the last update sequence number, as returned by CouchDB. Refer to
         ``GET /<db>/_changes`` API for more information.
 
-        query parameters,
+        Optional key-word arguments
+
+        ``callback``,
+            callback function accepting a single argument ``line`` for every
+            line of change notification as JSON string. This argument is valid
+            only for feed=continuous. In continuous-mode, ``style`` and
+            ``heartbeat`` query parameters are equally valid. Although
+            callback function will be invoked for every notification line,
+            changes() API method itself will block for-ever or until the
+            ``heartbeat`` expires.
+
+        query key-word arguments,
 
         ``feed``,
-            Type of feed, longpoll | continuous | normal
+            Type of feed, ``longpoll`` | ``continuous`` | ``normal``.
+        ``style``,
+            defines the structure of changes array for each row, can be one of,
+            ``all_docs`` | ``main_only``. ``all_docs`` will provide more,
+            revision and conflict information in the changes array for each
+            result row. If you want to specify the default explicitly, the value
+            is ``main_only``.
         ``filter``,
             Filter function from a design document to get updates.
         ``heartbeat``,
             Period in milliseconds, after which an empty line is sent during
             longpoll or continuous.
         ``include_docs``,
-            Must be 'true' to include the document with the result.
+            A string value of either ``true`` or ``false``. If ``true``,
+            include the document with the result.
         ``limit``,
             Maximum number of rows to return.
         ``since``,
@@ -463,7 +508,8 @@ class Database( object ) :
         """
         conn, paths = self.conn, ( self.paths + ['_changes'] )
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
-        s, h, d = _changes( conn, paths, hthdrs=hthdrs, **query )
+        s, h, d = _changes( conn, paths, hthdrs=hthdrs, chunk_cb=callback,
+                            **query )
         return d
 
     def compact( self, designdoc=None, hthdrs={} ) :
@@ -471,13 +517,13 @@ class Database( object ) :
         disk database file by performing the following operations.
 
         * Writes a new version of the database file, removing any unused
-        sections from the new version during write. Because a new file is
-        temporary created for this purpose, you will need twice the current
-        storage space of the specified database in order for the compaction
-        routine to complete.
+          sections from the new version during write. Because a new file is
+          temporarily created for this purpose, you will need twice the current
+          storage space of the specified database in order for the compaction
+          routine to complete.
         * Removes old revisions of documents from the database, up to the
-        per-database limit specified by the _revs_limit database
-        parameter.
+          per-database limit specified by the _revs_limit database
+          parameter.
          
         Alternatively, you can specify the ``designdoc`` key-word argument to
         compact the view indexes associated with the specified design
@@ -486,8 +532,8 @@ class Database( object ) :
         database change.
 
         Return JSON converted object as returned by CouchDB, refer to 
-        ``POST /<db>/_compact`` and ``POST /<db>/_compact>/<designdoc>`` for
-        more information.
+        ``POST /<db>/_compact`` and ``POST /<db>/_compact>/<designdoc>`` APIs
+        for more information.
 
         Admin-prev, Yes
         """
@@ -532,7 +578,8 @@ class Database( object ) :
 
         You can optionally delete documents during a bulk update by adding the
         `_deleted` field with a value of true to each docment ID/revision
-        combination within the submitted JSON structure.
+        combination within the submitted JSON structure. Which is what
+        bulkdelete() API method does.
 
         `docs` contains a list of :class:`Document` instances or dictionaries.
         In case of :class:`Document` instance, the object instance will be
@@ -584,11 +631,11 @@ class Database( object ) :
         s, h, d = _temp_view( conn, designdoc, paths, hthdrs=hthdrs, **query )
         return d
 
-    def purge( self, docs, revs=None, hthdrs={} ) :
+    def purge( self, docs, hthdrs={} ) :
         """A database purge permanently removes the references to deleted
         documents from the database. Deleting a document within CouchDB
         does not actually remove the document from the database, instead,
-        the document is marked as a deleted (and a new revision is created).
+        the document is marked as deleted (and a new revision is created).
         This is to ensure that deleted documents are replicated to other
         databases as having been deleted.
         The purging of old documents is not replicated to other databases.
@@ -625,7 +672,8 @@ class Database( object ) :
         meta information about the return structure, and the list documents
         and basic contents, consisting the ID, revision and key. The key is
         generated from the document ID. Refer to ``POST /<db>/_all_docs`` from
-        CouchDB API manual for more information.
+        CouchDB API manual for more information, like default values, for
+        unspecified query parameters.
 
         If optional key-word argument `keys` is passed, specifying a list of
         document ids, only those documents will be fetched and returned.
@@ -633,28 +681,32 @@ class Database( object ) :
         query parameters are similar to that of views.
 
         ``descending``,
-            Return the documents in descending by key order.
+            A string value of either ``true`` or ``false``. If ``true``,
+            return documents in descending key order.
         ``endkey``,
             Stop returning records when the specified key is reached.
         ``endkey_docid``,
             Stop returning records when the specified document ID is reached.
         ``group``,
-            Group the results using the reduce function to a group or single
+            A string value of either ``true`` or ``false``. If ``true``,
+            group the results using the reduce function to a group or single
             row.
         ``group_level``,
             Description Specify the group level to be used.
         ``include_docs``,
-            Include the full content of the documents in the response.
+            A string value of either ``true`` or ``false``. If ``true``,
+            include the full content of the documents in the response.
         ``inclusive_end``,
-            Specifies whether the specified end key should be included in the
-            result.
+            A string value of either ``true`` or ``false``. If ``true``,
+            includes specified end key in the result.
         ``key``,
             Return only documents that match the specified key.
         ``limit``,
             Limit the number of the returned documents to the specified
             number.
         ``reduce``,
-            Use the reduction function.
+            A string value of either ``true`` or ``false``. If ``true``,
+            use the reduction function.
         ``skip``,
             Skip this number of records before starting to return the results.
         ``stale``,
@@ -664,7 +716,8 @@ class Database( object ) :
         ``startkey_docid``,
             Return records starting with the specified document ID.
         ``update_seq``,
-            Include the update sequence in the generated results,
+            A string value of either ``true`` or ``false``. If ``true``,
+            include the update sequence in the generated results.
 
         Alternately, query parameters can be passed as a dictionary or Query
         object to key-word argument ``_q``.
@@ -688,18 +741,19 @@ class Database( object ) :
         """TBD : To be implemented"""
 
     def security( self, security=None, hthdrs={} ) :
-        """Get or Set the current secrity object for this database. The
-        security object consists of two compulsory elements, 
-            `admins` and `readers`,
-        which are used to specify the list of users and/or roles that
-        have `admin` and `reader` rights to the database respectively. Any
-        additional fields in the security object are optional. The entire
+        """Get or Set the current security object for this database. The
+        security object consists of two compulsory elements, ``admins`` and
+        ``readers``, which are used to specify the list of users and/or roles
+        that have `admin` and `reader` rights to the database respectively.
+        Any additional fields in the security object are optional. The entire
         security object is made available to validation and other internal
         functions, so that the database can control and limit functionality.
 
         To set current security object, pass them as key-word argument,
+
         ``security``,
             Security object contains admins and readers
+
         Return the current security object
 
         Admin-prev, Yes for setting the security object
@@ -760,6 +814,7 @@ class Database( object ) :
     def put( self, hthdrs={} ) :
         """Create a new database, corresponding to this instance. The database
         name must be adhere to the following rules.
+
         * Name must begin with a lowercase letter
         * Contains lowercase characters (a-z)
         * Contains digits (0-9)
@@ -777,7 +832,7 @@ class Database( object ) :
         return self
 
     def delete( self, hthdrs={} ) :
-        """Delete the database from the server, and all the documents and
+        """Delete the database from server, and all the documents and
         attachments contained within it.
 
         Return, JSON converted object as returned by couchDB.
@@ -790,7 +845,10 @@ class Database( object ) :
         return None
 
     def fetch( self ) :
-        """Call to this method will bulk fetch all the active document that are
+        """ -- TBD -- This is part multi-document access design, which is still
+        evolving.
+
+        Call to this method will bulk fetch all the active document that are
         yet to be fetched from the server.
         """
         activedocs = self.singleton_docs['active'].values()
@@ -804,7 +862,10 @@ class Database( object ) :
         return result
 
     def commit( self ):
-        """Call to this method will bulk commit all the active documents that
+        """-- TBD -- This is part multi-document access design, which is still
+        evolving.
+
+        Call to this method will bulk commit all the active documents that
         are dirtied.
         """
         from  couchpy.doc       import ST_EVENT_PUT

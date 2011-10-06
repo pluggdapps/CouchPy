@@ -47,8 +47,8 @@ secobj = {
 def test_basics( url ) :
     print "Testing create database ..."
 
-    c = Client( url=url, debug=True )
-    ca = Client( url=url, debug=True )
+    c = Client( url=url )
+    ca = Client( url=url )
     ca.login( 'pratap', 'pratap' )
 
     [ db.delete() for db in ca.databases ]
@@ -56,19 +56,22 @@ def test_basics( url ) :
     print "Testing instantiation ..."
     db1 = ca.put( 'testdb1' )
     db2 = ca.put( 'testdb2' )
-    assert db1.singleton_docs == Database._singleton_docs[db1.dbname]
+    c.Database( 'testdb1' )
+    c.Database( 'testdb2' )
+    print "Testing `opendbs` in client  ..."
+    assert sorted( c.opendbs.keys() ) == [ 'testdb1', 'testdb2' ]
+    assert ca.Database( 'testdb1' ) == ca.Database( 'testdb1' )
+    assert ca.Database( 'testdb1' ) != ca.Database( 'testdb2' )
+    print "Testing `singleton_docs` in database instance  ..."
+    assert db1.singleton_docs == { 'active' : {}, 'cache' : {} }
     db3 = ca.put( 'testdb3' )
     assert len(c) == 3
-    assert db1.dbname in db3._singleton_docs
-    assert db2.dbname in db3._singleton_docs
-    assert db3.dbname in db3._singleton_docs
 
     dba = ca.put( 'testdb' )
     db  = c.Database( 'testdb' )
 
     print "Testing .info property and __call__ operation ..."
     info = db()
-    assert info == db.info
     assert db.info is info
     assert sorted(info.keys()) == sorted([
             u'update_seq', u'disk_size', u'purge_seq', u'doc_count',
@@ -96,13 +99,13 @@ def test_basics( url ) :
     assert 'joe1' in db
     assert 'paris' not in db
     joe1doc = db['joe1']
-    del dba['joe1']
+    joe1doc.delete()
     assert 'joe1' not in db
     joe1doc = db.Document( 'joe1', rev=joe1doc._rev ).fetch()
     assert joe1doc._deleted
 
-    print "Testing changes() method ..."
-    test_changes( db )
+    print "Testing ispresent() method ..."
+    assert db.ispresent()
 
     print "Testing blukdocs() bulkdelete() methods ..."
     docs = {}
@@ -174,23 +177,44 @@ def test_basics( url ) :
     dba.delete()
     assert bool( dba ) == False
 
-def test_changes( db ):
-    mode = choice([ 'normal', 'continuous', 'longpoll' ])
-    query = {}
-    query.update( feed=mode ) if choice([ True, False ]) else None
-    query.update( heartbeat=100 ) if choice([ True, False ]) else None
-    query.update( include_docs='true' ) if choice([ True, False ]) else None
-    query.update( limit=10 ) if choice([ True, False ]) else None
-    query.update( since=2 ) if choice([ True, False ]) else None
-    query.update( timeout=100 ) if choice([ True, False ]) else None
+def test_changes( url ):
+    c = Client( url=url )
+    ca = Client( url=url )
+    ca.login( 'pratap', 'pratap' )
+    [ db.delete() for db in ca.databases ]
 
-    d = db.changes()
-    assert 'results' in d
-    assert len(d['results']) == 2
+    dba = ca.put( 'testdb' )
+    db = c.Database( 'testdb' )
+    # Create doc
+    db.Document( sampledoc ).post()
+    db.Document( sampledoc1 ).post()
+    # Update doc
+    doc = db.Document( sampledoc['_id'] ).fetch()
+    doc.field1 = 10
+    doc.put()
 
+    print "Testing changes() method ..."
+    d = db.changes(feed='normal', since=1)
+    assert d['results'][0]['id'] == 'joe1'
+    assert d['results'][1]['id'] == 'joe'
+    assert d['results'][0]['changes'][0]['rev'].startswith('1-')
+    assert d['results'][1]['changes'][0]['rev'].startswith('2-')
+    d = db.changes(feed='normal', since=1, include_docs='true')
+    assert all([ 'doc' in x for x in d['results'] ])
+
+def continuous_changes( url ):
+    c = Client( url=url )
+    db = c.Database( 'testdb' )
+    print 'Reading changes ...'
+    def fn( line ) :
+        print line
+    db.changes( feed='continuous', callback=fn, timeout=1000 )
 
 if __name__ == '__main__' :
     url = 'http://localhost:5984/'
-    c = Client( url=url, debug=True )
+    #logging.basicConfig( level=logging.INFO )
+    c = Client( url=url )
     print 'CouchDB version %s' % c.version()
     test_basics( url )
+    test_changes( url )
+    #continuous_changes( url )

@@ -1,106 +1,3 @@
-"""A ReSTful client for CouchDB server. Aside from providing a client
-interface, :class:`Client` instances provide pythonified way of accessing it,
-for example, :class:`Client` instances behave like a dictionary of databases.
-
-Here is a list of examples that can be done with :class:`Client` instances.
-
-Create a client object,
->>> couch = Client()
-
-Check for server availability,
->>> bool( couch )
-True
-
-Get server information,
->>> couch()
-{ "couchdb" : "Welcome", "version" : "<version>" }
-
-Get active tasks in DB server, (required admin privileges)
->>> couch.active_tasks()
-[]
-
-Number of databases present in the server,
->>> len(couch)
-3
-
-Get a list of all database names,
->>> couch.all_dbs()
-[ '_users', 'sessions', 'bootdb' ]
-
-Iterate over all databases in the server, returns a list of 
-:class:`couchpy.database.Database` objects,
->>> [ db for db in couch ]
-[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
-
-Check whether a database is present,
->>> couch.has_database( '_users' )
-True
->>> '_users' in couch               # Python way
-True
->>> 'contacts' in couch
-False
-
-Get :class:`couchpy.database.Database` object,
->>> usersdb = couch['_users']
->>> couch['sessions']
-<Database 'sessions'>
-
-Get server statistics,
->>> couch.stats()
-{ ... }     # A dictionary of server statistics
-
-Get a list of 2 univerally unique IDs, the count argument is optional
->>> c.uuids( 2 )
-[ u'a0cf4956301a349a0ecc99370e74331e', u'93e4ec906703b7a00abbfd46b46425fb' ]
-
-
-Operations that require admin privileges :
-
-Restart couchdb server instance,
->>> couch.restart()
-
-Get server log (required admin privileges)
->>> logs = couch.log().splitlines()
->>> couch.log( offset=100, bytes=10 )
-
-Server configuration
->>> couch.config()      # Get the current configuration dictionary, section wise
->>> couch.config( section='uuids' )
-{u'algorithm': u'utc_random'}
->>> couch.config( section='uuids', key='algorithm' )
-u'utc_random'
->>> couch.config( section='uuids', key='algorithm', value='random') # Update
->>> couch.config( section='uuids', key='algorithm' )                
-u'random'
->>> couch.config( section='uuids', key='algorithm', delete=True )   # Delete
-
->>> couch.addadmin( 'sokochi', 'joe123' ) # Add a server admin (username,passwd)
->>> couch.deladmin( 'sokochi' )           # Delete a server admin
->>> couch.admins()                        # List of server admins
-{ 'pratap' : u'-hashed-cf8f18ed9a17e6d6....' }
-
-Server authetication and session,
->>> couch.login( username, password )
->>> couch.authsession() # Authenticated user's session information
->>> couch.logout()      # Authenticated user will be identified via cookie.
-
-Database operations :
-
->>> c.put('blog')                       # Create database
-<Databse 'blog'>
->>> c.Database('blog')                  # Get the Database instance
-<Databse 'blog'>
->>> c.delete( 'blog' )                  # Delete database
->>> c.has_database( 'blog' )            # Check whether database is present
-True
-
-Miscellaneous operation,
->>> couch.version()
-u'1.0.1'
->>> couch.ispresent()
-True
-"""
-
 # CouchPy Couchdb data-modeling for CouchDB database management systems
 #   Copyright (C) 2011  SKR Farms (P) LTD
 # 
@@ -119,6 +16,129 @@ True
 
 # -*- coding: utf-8 -*-
 
+""":class:`Client` implements required client interface for a CouchDB
+server. Aside from this, :class:`Client` instance provide pythonified way of
+accessing the database systems, for example, a :class:`Client` instance behave
+like a dictionary of databases. A :class:`Client` constructor typically takes
+httpurl (for server) as its argument. If url is not provided, ENVIRONMENT
+variable ``COUCHDB_URL`` will be used if available, if that is also not
+available then the default url 'http://localhost:5984/' will be assumed.
+
+A collection of examples using :class:`Client` objects.
+
+Create a client object,
+
+>>> couch = Client()
+
+Check for server availability,
+
+>>> bool( couch )
+True
+
+Get server information,
+
+>>> couch()
+{ "couchdb" : "Welcome", "version" : "<version>" }
+
+Get active tasks in DB server, (required admin privileges)
+
+>>> couch.active_tasks()
+[]
+
+Number of databases present in the server,
+
+>>> len(couch)
+3
+
+Get a list of all available database names,
+
+>>> couch.all_dbs()
+[ '_users', 'sessions', 'bootdb' ]
+
+Iterate over all databases in the server, returns a list of 
+:class:`couchpy.database.Database` objects,
+
+>>> [ db for db in couch ]
+[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
+
+Check whether a database is present,
+
+>>> couch.has_database( '_users' )
+True
+>>> '_users' in couch               # Python way
+True
+>>> 'contacts' in couch
+False
+
+Get :class:`couchpy.database.Database` object as a dictionary key from client,
+
+>>> usersdb = couch['_users']
+>>> couch['sessions']
+<Database 'sessions'>
+
+Get server statistics,
+
+>>> couch.stats()
+{ ... }     # A dictionary of server statistics
+
+Get a list of 2 univerally unique IDs, the count argument is optional.
+
+>>> c.uuids( 2 )
+[ u'a0cf4956301a349a0ecc99370e74331e', u'93e4ec906703b7a00abbfd46b46425fb' ]
+
+
+Operations that require admin privileges :
+
+Restart couchdb server instance,
+
+>>> couch.restart()
+
+Get server log (required admin privileges)
+
+>>> logs = couch.log().splitlines()
+>>> couch.log( offset=100, bytes=10 )
+
+Server configuration
+
+>>> couch.config()      # Get the current configuration dictionary, section wise
+>>> couch.config( section='uuids' )
+{u'algorithm': u'utc_random'}
+>>> couch.config( section='uuids', key='algorithm' )
+u'utc_random'
+>>> couch.config( section='uuids', key='algorithm', value='random') # Update
+>>> couch.config( section='uuids', key='algorithm' )                
+u'random'
+>>> couch.config( section='uuids', key='algorithm', delete=True )   # Delete
+
+>>> couch.addadmin( 'sokochi', 'joe123' ) # Add a server admin (username,passwd)
+>>> couch.deladmin( 'sokochi' )           # Delete a server admin
+>>> couch.admins()                        # List of server admins
+{ 'pratap' : u'-hashed-cf8f18ed9a17e6d6....' }
+
+Server authetication and session,
+
+>>> couch.login( username, password )
+>>> couch.authsession() # Authenticated user's session information
+>>> couch.logout()      # Authenticated user will be identified via cookie.
+
+Database operations :
+
+>>> c.put('blog')                       # Create database
+<Databse 'blog'>
+>>> c.Database('blog')                  # Get the Database instance
+<Databse 'blog'>
+>>> c.delete( 'blog' )                  # Delete database
+>>> c.has_database( 'blog' )            # Check whether database is present
+True
+
+Miscellaneous operation,
+
+>>> couch.version()
+u'1.0.1'
+>>> couch.ispresent()
+True
+"""
+
 import os, logging
 from   Cookie           import SimpleCookie
 
@@ -126,78 +146,71 @@ import rest
 from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
 from   couchpy          import hdr_acceptjs, hdr_ctypejs, hdr_ctypeform, \
-                               hdr_accepttxtplain, hdr_acceptany
+                               hdr_accepttxtplain, hdr_acceptany, \
+                               __version__, defconfig
 
 # TODO :
-#   1. Fix `replicate()` method.
-#   2. Deleteing configuration section/key seems to have some complex options.
+#   1. Deleteing configuration section/key seems to have some complex options.
 #      But the API doc is not clear about it.
-#   4. Logging is just not working.
-#   5. Test cases for addadmin(), deladmin(), admins().
+#   2. Logging is just not working.
 
 log = logging.getLogger( __name__ )
-__version__ = '0.1'
+__version__ = __version__
 DEFAULT_URL = os.environ.get( 'COUCHDB_URL', 'http://localhost:5984/' )
 
 def _headsrv( conn, paths=[], hthdrs={} ) :
     """HEAD /"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.head( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.warn( 'HEAD request to / failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.warn( 'HEAD / request failed' )
+    return s, h, d
 
 def _getsrv( conn, paths=[], hthdrs={} ) :
     """GET /"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.warn( 'GET request to / failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.warn( 'GET / request failed' )
+    return s, h, d
 
 def _active_tasks( conn, paths=[], hthdrs={} ) :
     """GET /_active_tasks"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'GET request to /_active_tasks failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'GET /_active_tasks request failed' )
+    return s, h, d
 
 def _all_dbs( conn, paths=[], hthdrs={} ) :
     """GET /_all_dbs"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'GET request to /_all_dbs failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'GET /_all_dbs request failed' )
+    return s, h, d
 
 def _restart( conn, paths=[], hthdrs={} ) :
     """POST /_restart"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     s, h, d = conn.post( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'POST request to /_restart failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'POST /_restart request failed' )
+    return s, h, d
 
 def _stats( conn, paths=[], hthdrs={} ) :
     """POST /_stats/"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'POST request to /_stats failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'POST /_stats request failed' )
+    return s, h, d
 
 def _uuids( conn, paths=[], hthdrs={}, **query ) :
     """POST /_uuids
@@ -206,22 +219,20 @@ def _uuids( conn, paths=[], hthdrs={}, **query ) :
     """
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'POST request to /_uuids failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'POST /_uuids request failed' )
+    return s, h, d
 
 def _replicate( conn, body, paths=[], hthdrs={} ) :
     """POST /_replicate"""
     hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs, hdr_ctypejs )
     body = rest.data2json( body )
     s, h, d = conn.post( paths, hthdrs, body )
-    if s == ACCEPTED and d['ok'] :
-        return s, h, d
-    else :
-        log.error( 'POST request to /_replicate failed' )
-        return (None, None, None)
+    if (s != ACCEPTED) or (not d['ok']) :
+        s = h = d = None
+        log.error( 'POST /_replicate request failed' )
+    return s, h, d
 
 def _log( conn, paths=[], hthdrs={}, **query ) :
     """GET /_log
@@ -236,11 +247,10 @@ def _log( conn, paths=[], hthdrs={}, **query ) :
     #if isinstance( query.get('bytes', None), (int,long) ) :
     #    query['bytes']  = '%r' % str(query['bytes'])
     s, h, d = conn.get( paths, hthdrs, None, _query=query.items() )
-    if s == OK :
-        return s, h, d
-    else :
-        log.error( 'POST request to /_log failed' )
-        return (None, None, None)
+    if s != OK :
+        s = h = d = None
+        log.error( 'POST /_log request failed' )
+    return s, h, d
 
 def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     """
@@ -261,11 +271,10 @@ def _config( conn, paths=[], hthdrs={}, **kwargs ) :
     else :
         method = 'GET'
         s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
+    if s != OK :
+        s = h = d = None
         log.error( '%s request to (%s) failed' % (method, paths) )
-        return (None, None, None)
+    return s, h, d
 
 def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
     """
@@ -285,91 +294,72 @@ def _session( conn, paths, login=None, logout=None, hthdrs={}, **kwargs ) :
         method = 'GET'
         hthdrs = conn.mixinhdrs( hthdrs, hdr_acceptjs )
         s, h, d = conn.get( paths, hthdrs, None )
-    if s == OK :
-        return s, h, d
-    else :
+    if s != OK :
+        s = h = d = None
         log.error( '%s request to /_session failed' % (method, paths) )
-        return (None, None, None)
+    return s, h, d
 
 
 #---- Client class
 
 class Client( object ) :
-    """Initialize a client object, with the base `url` and optional
-    key-word arguments.
+    """Client interface for CouchDB server.
 
     ``url``,
-        URI to the server, EG, ``http://localhost:5984/``
-
-    ``full_commit``,
-        Boolean, turn on the X-Couch-Full-Commit header
+        Server http url.
+    ``pyconfig``,
+        Configuration parameters.
     ``hthdrs``,
         Dictionary of HTTP request headers, remembered at the instance
         level.  Aside from these headers, if a method supports `hthdrs` key-word
-        argument, it will be used (along with instance-level headers) for a
+        argument, it will be used (overriding ``hthdrs``) for a
         single call.
-    ``session``,
-        :class:`httpc.HttpSession` instance or None for a default session
-    ``debug``, 
-        for enhanced logging
-    ``cookie``,
-        `SimpleCookie` cookie object, that can be used to populate headers,
-        especially the authentication cookie
-    ``defaultuser``,
-        Default-user to be returned when user session is not
-        authenticated. Used by sessionuser() method.
+    ``cookie``
+        cookie value for authenticated sessions. Value can be ``basestring`` or
+        cookie.SimpleCookie object.
     """
 
-    DEFAULTUSER = 'anonymous'
+    def __init__( self, url=None, pyconfig=None, hthdrs=None, cookie=None ) :
+        self.hthdrs = hthdrs or {}
+        self.cookie = cookie
+        self.pyconfig = dict( defconfig.items() )
+        self.pyconfig.update( pyconfig or {} )
 
-    def __init__( self, url=DEFAULT_URL, **kwargs) :
-        self.url = url
+        self.url = url or self.pyconfig['realm']
+        cookie and self.conn.savecookie( self.hthdrs, cookie )
+        self.conn = rest.ReSTful(self.url, HttpSession(), headers=self.hthdrs)
 
-        self.full_commit = full_commit = kwargs.get( 'full_commit', None )
-        self.htsession = htsession = kwargs.get( 'htsession', HttpSession() )
-        self.debug = debug = kwargs.get( 'debug', False )
-        self.cookie = cookie = kwargs.get( 'cookie', None )
-        self.defaultuser = kwargs.get( 'defaultuser', self.DEFAULTUSER )
-        hthdrs = kwargs.get( 'hthdrs', {} )
-
-        if full_commit != None :
-            hthdrs.update({ 'X-Couch-Full-Commit' : str(full_commit).lower() })
-
-        self.conn = rest.ReSTful( self.url, htsession, headers=hthdrs )
-        self.hthdrs = self.conn.mixinhdrs( hthdrs )
         self.paths = []
-        self.available = None
+        self.available = None       # assume that server is not available
         # Load the saved cookie to preserve the authentication
-        cookie != None and self.conn.savecookie( self.hthdrs, cookie )
         self._authsession, self.opendbs = None, {}
-        # Database cache
+
 
     #---- Pythonification of instance methods. They are supposed to be
     #---- wrappers around the actual API.
 
     def __contains__( self, name ) :
-        """Return True or False based on whether the server contains
-        database specified by ``name``. Refer :func:`Client.has_database`
+        """Return ``True`` if database ``name`` is present, else ``False``. Refer
+        :func:`Client.has_database`
         """
         return self.has_database(name)
 
     def __iter__( self ) :
-        """Iterate over all databases available in the server.  Each iteration
+        """Iterate over all databases available in the server. Each iteration
         yields :class:`couchpy.database.Database` instance corresponding to
-        a database in the server.
-        Refer :func:`Client.all_dbs`
+        a database in the server. Refer :func:`Client.all_dbs`
         """
         return self.DatabaseIterator()
 
     def __len__( self ) :
-        """Return the count of databases available in the server."""
+        """Return the count of database available in the server."""
         return len(self.all_dbs())
 
     def __nonzero__( self ) :
-        """If returns `True`, then the server is available. This is essentially
-        a one time check to know whether the database instance pointed by `url`
-        is available. Subsequent checks will simply return the remembered status.
-        To make a fresh request for server availability use,
+        """If returns ``True``, then the server is available. This is essentially
+        a one time check to know whether the database instance pointed by
+        `realm` is available. Subsequent checks will simply return the
+        remembered status.  To make a fresh request for server availability use,
         :func:`Client.ispresent` method."""
         if self.available == None :
             self.available = self.ispresent()
@@ -379,27 +369,27 @@ class Client( object ) :
         return '<%s %r>' % (type(self).__name__, self.url)
 
     def __delitem__( self, name ) :
-        """Remove the database with the specified ``name``. Refer
-        :func:`Client.delete` method
+        """Remove database ``name`` from server. Refer :func:`Client.delete`
+        method.
         """
         return self.delete(name)
 
     def __getitem__( self, name ) :
-        """Return a :class:`couchpy.database.Database` instance representing
-        database specified by ``name``.
-        Refer :func:`Client.database` method
+        """Return a :class:`couchpy.database.Database` instance for database,
+        ``name``. Refer :func:`Client.database` method
         """
         return self.Database(name)
 
     def __call__( self ) :
-        """Check whether CouchDB instance is alive and return the welcome string,
-        which will be something like
+        """Check whether CouchDB instance is alive and return the welcome
+        string, which will be something like
+
         >>> c = Client()
         >>> c()
         { "couchdb" : "Welcome", "version" : "<version>" }
 
-        To just check for the availability of the server use
-        :func:`Client.ispresent` method.
+        To just check for server availability, use :func:`Client.ispresent`
+        method.
         """
         conn, paths = self.conn, self.paths
         s, h, d = _getsrv( conn, paths, hthdrs=self.hthdrs )
@@ -416,6 +406,7 @@ class Client( object ) :
         """Do a fresh check for server availability. This will emit a `HEAD`
         request to the server. For efficiency reasons you can just use the
         boolean operator on the :class:`Client` instance like,
+
         >>> bool( couch )
         """
         conn, paths = self.conn, self.paths
@@ -452,7 +443,7 @@ class Client( object ) :
         Admin-Prev, No
         """
         from   database     import Database
-        conn, paths, debug = self.conn, (self.paths + [ '_all_dbs' ]), self.debug
+        conn, paths = self.conn, (self.paths + [ '_all_dbs' ])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
         return d if d else []
@@ -486,7 +477,7 @@ class Client( object ) :
 
     def restart( self, hthdrs={} ) :
         """Restart the CouchDB instance. You must be authenticated as a user
-        with administration privileges for this to work. Returns a Boolean,
+        with administrative privileges for this to work. Returns a Boolean,
         indicating success or failure
 
         Admin-Prev, Yes
@@ -502,10 +493,17 @@ class Client( object ) :
         collating the statistics for a range of entries, with each individual
         statistic being easily identified, and the content of each statistic
         is self-describing.  You can also access individual statistics by
-        passing ``statistics-sections`` and ``statistic-ID`` as positional
-        arguments.
+        passing ``statistics-section`` and ``statistic-id`` as positional
+        arguments, similiar to the following example
 
         >>> c.stats( 'couchdb', 'request_time' )
+        {'couchdb': {'request_time': {'current': 1265.6880000000001,
+                                      'description': 'length of a request inside CouchDB without MochiWeb',
+                                      'max': 235.0,
+                                      'mean': 14.717000000000001,
+                                      'min': 3.0,
+                                      'stddev': 29.754999999999999,
+                                      'sum': 1265.6880000000001} } }
 
         Admin-Prev, No
         """
@@ -608,12 +606,12 @@ class Client( object ) :
         s, h, d = _session( conn, paths, login=(username, password), hthdrs=hthdrs )
         self.cookie = sc = SimpleCookie()
         sc.load( h['set-cookie'] )
-        conn.savecookie( self.hthdrs, sc )  # Save the cookie in `self.hthdrs`
+        self.conn.savecookie( self.hthdrs, sc )  # Save the cookie in `self.hthdrs`
         return s, h, d if s == OK and d['ok'] else (None, None, None)
 
     def logout( self, hthdrs={} ) :
         """Logout from authenticated DB session. The authentication cookie is
-        not longer valid.
+        no longer valid.
         """
         conn, paths = self.conn, ['_session']
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -622,8 +620,9 @@ class Client( object ) :
         self.hthdrs.pop( 'Cookie', None )
 
     def authsession( self, hthdrs={} ) :
-        """Fetch the authenticated session information for this client. Note
-        that browser-session is not handled by the client.
+        """Fetch the authenticated session information for this client. At any
+        point only one user can remain authenticated for a single client
+        instance. Note that browser-session is not handled by the client.
         """
         from  couchpy   import AuthSession
         if self._authsession == None :
@@ -636,7 +635,7 @@ class Client( object ) :
     def _sessionuser( self ) :
         session = self.authsession()
         c = session.userCtx
-        return c.get( 'name', self.defaultuser ) if c else self.defaultuser
+        return c.get( 'name', None ) if c else None
 
 
     #---- Database APIs via client object,
@@ -663,8 +662,8 @@ class Client( object ) :
 
     def has_database( self, name, hthdrs={} ) :
         """Return whether the server contains a database with the specified
-        ``name``. Return, `True` if a database with the ``name`` exists, `False`
-        otherwise
+        ``name``. Return, ``True`` if a database with the ``name`` exists,
+        ``False`` otherwise
 
         Admin-Prev, No
         """
@@ -687,8 +686,12 @@ class Client( object ) :
 
 
     def commit( self ):
-        """Call to this method will bulk commit all the active documents
+        """ -- TBD -- This is part multi-document access design, which is still
+        evolving.
+
+        Call to this method will bulk commit all the active documents
         (dirtied) under every open database for this client.
+
         """
         [ db.commit() for dbname, db in self.opendbs.items() ]
 
@@ -701,7 +704,9 @@ class Client( object ) :
 
     # TODO : This is a evolving feature. A lot needs to be done :)
     def replicate( self, source, target, hthdrs={}, **options ) :
-        """Request, configure, or stop, a replication operation.
+        """ -- TBD --
+
+        Request, configure, or stop, a replication operation.
 
         ``source``
             URL of the source database
@@ -734,7 +739,6 @@ class Client( object ) :
 
     databases = property( lambda self : [ self.Database(n) for n in self.all_dbs() ])
     sessionuser = property( _sessionuser )
-
 
 
 class Log( object ):

@@ -20,7 +20,7 @@ import urllib, logging, time
 from   copy             import deepcopy
 from   urlparse         import urlsplit, urlunsplit
 
-from   couchpy.json     import JSON
+from   couchpy.utils    import JSON
 
 log = logging.getLogger( __name__ )
 
@@ -65,14 +65,15 @@ class ReSTful( object ) :
 
     def _jsonloads( self, hdr, data ) :
         if 'application/json' in hdr.get( 'content-type', '' ) :
-            data = JSON().decode( data.getvalue() )
+            val = data.getvalue()
+            data = val and JSON().decode( val ) or ''
         return data
 
     def _httpsession( self ):
         import couchpy.httpc
-        return httpc.HttpSession()
+        return couchpy.httpc.HttpSession()
 
-    def _request( self, method, paths, headers, body, _query ):
+    def _request( self, method, paths, headers, body, _query, chunk_cb=None ):
         if isinstance(headers, dict) :
             all_headers = deepcopy( self.headers )
             all_headers.update( headers )
@@ -82,15 +83,22 @@ class ReSTful( object ) :
         st = time.time()
         resp = self.htsess.request(
                     method, url, body=body, headers=all_headers,
-                    credentials=self.credentials
+                    credentials=self.credentials, chunk_cb=chunk_cb
                )
         log.info( "%6s %s %s (%s)" % (method, (time.time()-st), url, resp[0]) )
         return resp
 
+    def _simplecookie( self, cookie ):
+        if isinstance( cookie, basestring ):
+            sc = SimpleCookie()
+            sc.load( cookie )
+            return sc
+        return cookie
+
 
     #---- HTTP method requests.
 
-    def head( self, paths, hdrs, body, _query=[] ) :
+    def head( self, paths, hdrs, body, _query=[] ):
         """HEAD request with http-headers ``hdrs`` and ``body``, for resource
         specified by base-url (provided while instantiation) and a list of
         path-segments ``paths``. Optional ``_query``, which is list of
@@ -99,11 +107,11 @@ class ReSTful( object ) :
         Returns,
             HTTP response - status, headers, data
         """
-        s, h, d = self._request('HEAD', paths, hdrs, body, _query)
+        s, h, d = self._request( 'HEAD', paths, hdrs, body, _query )
         d = self._jsonloads( h, d ) if d != None else d
         return s, h, d
 
-    def get( self, paths, hdrs, body, _query=[] ) :
+    def get( self, paths, hdrs, body, _query=[], chunk_cb=None ):
         """GET request with http-headers ``hdrs`` and ``body``, for resource
         specified by base-url (provided while instantiation) and a list of
         path-segments ``paths``. Optional ``_query``, which is list of
@@ -112,11 +120,12 @@ class ReSTful( object ) :
         Returns,
             HTTP response - status, headers, data
         """
-        s, h, d = self._request('GET', paths, hdrs, body, _query)
+        s, h, d = self._request( 'GET', paths, hdrs, body, _query,
+                                 chunk_cb=chunk_cb )
         d = self._jsonloads( h, d )
         return s, h, d
 
-    def post( self, paths, hdrs, body, _query=[] ) :
+    def post( self, paths, hdrs, body, _query=[] ):
         """POST request with http-headers ``hdrs`` and ``body``, for resource
         specified by base-url (provided while instantiation) and a list of
         path-segments ``paths``. Optional ``_query``, which is list of
@@ -173,22 +182,41 @@ class ReSTful( object ) :
     #---- Helper methods for couchpy modules that are related to framing HTTP
     #---- request.
 
-    def savecookie( self, hthdrs, simplecookie ) :
-        """Save ``simplecookie`` into http-request-headers ``hthdrs`` and
-        return the same. ``hthdrs`` is expected to be a dictionary like object
-        and ``simplecookie`` is expected by a cookie.SimpleCookie instance.
-        """
-        x = [ hthdrs.get( 'Set-Cookie', hthdrs.get( 'set-cookie', '' )) ]
-        cookies = filter( None, x )
-        for name, morsel in simplecookie.items() :
-            cookies.append( '%s=%s' %  (name, morsel.value) )
-        hthdrs['Cookie'] = ', '.join(cookies)
-        return hthdrs
-
     def mixinhdrs( self, *hthdrs ) :
         newhthdrs = dict()
         [ newhthdrs.update(h) for h in hthdrs ]
         return newhthdrs
+
+    def savecookie( self, hthdrs, cookie ):
+        """Save ``cookie`` into http-request-headers ``hthdrs`` and
+        return the same. ``cookie`` is expected to be cookie.SimpleCookie
+        instance or cookie-value string.
+        """
+        sc = self._simplecookie(
+                hthdrs.get( 'Set-Cookie', hthdrs.get( 'set-cookie', None ))
+             ) or {}
+        cookies = [ '%s=%s' %  (n, m.value) for n, m in sc.items() ]
+        [ cookies.append( '%s=%s' %  (n, m.value) ) 
+          for n, m in self._simplecookie(cookie).items() ]
+        hthdrs['Cookie'] = ', '.join(cookies)
+        return hthdrs
+
+    def bool2json( self, val=None, boolkeys=[], inquery={} ):
+        """Translate python boolean `val` to JSON boolean. If `val` is
+        dictionary, all its values are expected to be python boolean.
+        """
+        convert = lambda v : ['false', 'true'][v]
+        if isinstance( val, bool ) :
+            return convert( v )
+        elif isinstance( val, dict ) :
+            return dict([ (k, ( convert(v) if isinstance(v,bool) else v ))
+                          for k,v in val.items() ])
+        else :
+            for k in boolkeys :
+                v = inquery.get(k, None)
+                if not isinstance( v, bool ) : continue
+                inquery.update( k=convert(v) )
+            return inquery
 
 
 def urljoin( base, *paths, **kwargs ) :
@@ -247,7 +275,7 @@ def _extract_credentials( url ) :
     try :
         creds, netloc = netloc.split('@')
         credentials = tuple( urllib.unquote(i) for i in creds.split(':') )
-        parts = [ parts[0] ] + [ netloc ] + parts[2:]
+        parts = [ parts[0] ] + [ netloc ] + list(parts[2:])
     except :
         credentials = None
     return urlunsplit(parts), credentials

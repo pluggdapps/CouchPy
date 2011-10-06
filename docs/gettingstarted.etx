@@ -1,0 +1,55 @@
+CouchDB is a NoSQL database management system. Its official wiki explains
+itself as,
+
+* A document database server, accessible via a RESTful JSON API.
+* Ad-hoc and schema-free with a flat address space.
+* Distributed, featuring robust, incremental replication with
+  bi-directional conflict detection and management.
+* Query-able and index-able, featuring a table oriented
+  reporting engine that uses JavaScript as a query language.
+
+CouchPy is programmatic interface in python for CouchDB database management
+systems. Apart from providing a programmatic access, it also provides data
+modelling, querying, creating views, and MVCS features. If you are new to
+NoSQL way of building database, you might have to forego some of the ideas
+learnt from relational database systems.
+
+h4. Client instance
+
+Interfacing with CouchDB server begins with a client instance, and every
+subsequent access starts from there.
+
+{{{ Code pycon
+>>> couch = Client() # Create a client object,
+}}}
+
+Get a list of all available database names,
+{{{ Code pycon
+>>> couch.all_dbs()
+[ '_users', 'sessions', 'bootdb' ]
+}}}
+
+Iterate over all databases in the server, returns a list of
+:class:`couchpy.database.Database` objects,
+{{{ Code pycon
+>>> [ db for db in couch ]
+[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
+}}}
+
+Get :class:`couchpy.database.Database` object as a dictionary key from client,
+{{{ Code pycon
+>>> usersdb = couch['_users']
+>>> couch['sessions']
+<Database 'sessions'>
+}}}
+
+Database operations,
+{{{ Code pycon
+>>> c.put('blog')                       # Create database
+<Databse 'blog'>
+>>> c.Database('blog')                  # Get the Database instance
+<Databse 'blog'>
+>>> c.delete( 'blog' )                  # Delete database
+>>> c.has_database( 'blog' )            # Check whether database is present
+True
+}}}

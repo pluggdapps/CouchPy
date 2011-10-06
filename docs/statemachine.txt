@@ -2,12 +2,33 @@
       /     post()       | aput()     \                  / ST_ACTIVE_POST
 Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
       \     delete()     |            /                  \ ST_ACTIVE_DIRTY
-        \ side-effects() | attach()  /                    \ST_CACHE_INVALID
+       \  side-effects() | attach()  /                    \ST_CACHE_INVALID
+
+ST_ACTIVE_INVALID :
+    Document is instantiated but cannot be used until it is fetched from the
+    server. Either the latest revision needs to be fetched or one of its
+    previous revision needs to be fetched.
+
+ST_ACTIVE_POST :
+    Document is instantiated to freshly insert into the database, using a
+    post() call.
+
+ST_ACTIVE_VALID :
+    Document is instantiated and its content are fetched from the server,
+    hence its fields are consumable, modifiable.
+
+ST_ACTIVE_DIRTY :
+    An ST_ACTIVE_VALID document's content was modified but not yet commited to
+    the server.
+
+ST_CACHE_INVALID :
+    Once a document instace goes out of scope (like for eg, http-request
+    context) it is cached for future use.
 
 
                         *-------------------------------------------*--------*
                         |                                           |        |
-                        |                    *-------------         |        |
+                        |                    *-------------*        |        |
                         |                    |             |        |        |
                         V                    V             |        |        |
                 *===================* *================*   |        |        |
@@ -18,7 +39,7 @@ Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
                 |      delete()     |   |       |          |        |        |
                 *===================*   |       |          |        |        |
                    ^        |    |    (try)     |         Instantiation      |
-                   |     fetch() |      |      post()     (without rev)      |
+                   |     fetch() |      |      post()     (without _rev)     |
                    |        |    |      |     fetch()      |        |        |
               invalidate()  |    |      |    delete()      |        |        |
                 delete()    |   DB-fetch()      |      *=======*    |        |
@@ -43,7 +64,7 @@ Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
                                                                 |            |
                                                                 |            |
                                                           Instantiation      |
-                                                            (with rev)-------*
+                                                           (with _rev)-------*
                                                                 |
                                                                 |
                                                            *=======*

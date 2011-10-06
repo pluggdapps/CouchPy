@@ -13,7 +13,7 @@ from   base64           import b64encode
 from   datetime         import datetime
 from   httplib          import BadStatusLine, HTTPConnection, HTTPSConnection
 
-from   couchpy.json     import JSON
+from   couchpy.utils    import JSON
 
 try:
     from cStringIO      import StringIO
@@ -100,7 +100,7 @@ class HttpSession( object ) :
         self.lock = Lock()
 
     def request( self, method, url, body=None, headers=None, credentials=None,
-                 num_redirects=0 ) :
+                 num_redirects=0, chunk_cb=None ) :
         """Handle a request
         :method ::
             HTTP method, GET, PUT, POST, DELETE, ALL
@@ -173,8 +173,8 @@ class HttpSession( object ) :
         # For large or chunked response bodies, do not buffer the full body,
         # and instead return a minimal file-like object
         else :
-            fn = lambda: self.release_connection(url, conn)
-            data = ResponseBody(resp, fn)
+            close_cb = lambda: self.release_connection(url, conn)
+            data = ResponseBody( resp, close_cb, chunk_cb=chunk_cb )
             streamed = True
 
         # Handle errors
@@ -265,7 +265,7 @@ class HttpSession( object ) :
 
         # JSON body
         if body and (not isinstance( body, basestring ) ) :
-            s = StringIO()
+            json = JSON()
             try : body = json.encode( body )
             except TypeError : pass
             headers.setdefault('Content-Type', 'application/json')
@@ -354,9 +354,10 @@ class HttpSession( object ) :
 
 class ResponseBody( object ) :
 
-    def __init__( self, resp, callback ) :
+    def __init__( self, resp, close_cb, chunk_cb=None ) :
         self.resp = resp
-        self.callback = callback
+        self.close_cb = close_cb
+        self.chunk_cb = chunk_cb
 
     def read( self, size=None ) :
         content = self.resp.read(size)
@@ -365,26 +366,31 @@ class ResponseBody( object ) :
 
     def close( self ) :
         while not self.resp.isclosed() : self.read(CHUNK_SIZE)
-        self.callback()
+        self.close_cb()
 
     def getvalue( self ) :
-        content = self.resp.read()
-        self.close()
+        if self.chunk_cb and \
+           (self.resp.msg.get('transfer-encoding') == 'chunked') :
+            [ self.chunk_cb(l) for l in self ]
+            content = ''
+        else :
+            content = self.resp.read()
+            self.close()
         return content
 
     def __iter__( self ) :
         assert self.resp.msg.get('transfer-encoding') == 'chunked'
         while True :
             chunksz = int(self.resp.fp.readline().strip(), 16)
-            if not chunksz:
+            if not chunksz :
                 self.resp.fp.read(2) #crlf
                 self.resp.close()
-                self.callback()
+                self.close_cb()
                 break
             chunk = self.resp.fp.read(chunksz)
             for ln in chunk.splitlines():
                 yield ln
-            self.resp.fp.read( 2 ) #crlf
+            self.resp.fp.read(2) #crlf
 
 class Dummy( object ) :
     pass

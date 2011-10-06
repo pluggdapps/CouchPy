@@ -1,0 +1,39 @@
+h3. MVCC (Multi Version Concurrency Control)
+
+h4. Conflicts while updating documents locally
+
+Documents can be concurrently accessed and updated in a local CouchDB Node.
+While read-access are mostly harmless, except that they might be slightly out
+of date (due to eventual consistency), writes can cause conflict failures.
+Conflict occurs when another piece of code have read the same version of the
+document and updated it (implicitly changing the document revision) and hence
+the server returns with a conflict error (provided the API does not do a force
+update). It is upto the application to re-read the document and update it
+again.
+
+h4. Conflicts due to periodic replication
+
+There can also be conflicts that happen due to automatic replication between
+CouchDB nodes. In such cases, the conflict is absorbed by the node and both
+the versions of the document is stored.
+
+When two versions of a document conflict during replication, the winning
+version is saved as the most recent version in the document’s history. Instead
+of throwing the losing version away, as you might expect, CouchDB saves this
+as a previous version in the document’s history, so that you can access it
+if you need to. This happens automatically and consistently, so both
+databases will make exactly the same choice.
+
+It is up to you to handle conflicts in a way that makes sense for your
+application. You can leave the chosen document versions in place, revert to
+the older version, or try to merge the two versions and save the result. 
+
+-----
+
+{{{ Nested 
+# { 'font-size' : 'small', 'color' : 'gray' }
+Document edited using Vim <br>
+/* vim: set filetype=etx : */
+}}}
+
+

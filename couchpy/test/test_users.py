@@ -32,7 +32,7 @@ def populate_user( c ) :
 
 def test_client() :
     log.info( "Testing client ..." )
-    c = Client( url='http://pratap:pratap@localhost:5984/', debug=True )
+    c = Client( url='http://pratap:pratap@localhost:5984/' )
     [ c.delete(db.dbname) for db in c ]
 
     [ c.delete(db.dbname) for db in c ]
