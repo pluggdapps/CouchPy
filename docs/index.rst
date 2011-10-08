@@ -3,10 +3,10 @@
 Introduction
 ============
 
-``couchpy`` is Python package for working with CouchDB_ from Python code.
+``couchpy`` is python package for working with CouchDB_ database server.
 It consists of the following main modules:
 
-There may also be more information on the `project website`_.
+`project website`_.
 
 Contents
 --------
@@ -19,7 +19,6 @@ Contents
    modules/doc.rst
    modules/utils.rst
    modules/rest.rst
-   future
 
 .. _couchpy: http://couchpy.pluggdapps.com/
 .. _couchDB: http://couchdb.org/
