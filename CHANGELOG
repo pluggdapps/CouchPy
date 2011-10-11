@@ -1,6 +1,12 @@
 {{ Toc( float='right' ) }}
 
-h3. 0.1dev ``{i} on Fri 2011-03-15``
+h3. 0.1dev ``{i} on Fri 2011-10-11``
+
+* Support for all CouchDB HTTP server APIs.
+* Access database and documents in python way.
+* JSON documents modelled as native python objects.
+* State-machine CRUD operations on Documents.
+* Lookup views in design-documents and query them.
 
 -----
 

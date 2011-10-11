@@ -28,7 +28,7 @@ h4. Database
   (OK), check up with the developers on this.
 * Complete the _missing_revs, _revs_diff, _all_docs, _temp_view methods of
   couchpy.database:Database class
-* __len__ access for Database instance. Optimize it using a view-reduce
+* \__len\__ access for Database instance. Optimize it using a view-reduce
   function.
 * Add support for _changes API's 'longpoll' and 'continuous' modes.
 * Log messages
@@ -36,10 +36,11 @@ h4. Database
 
 h4. Documents
 
-* __len__ access for Document instance. Optimize it using a view-reduce function.
+* \__len\__ access for Document instance. Optimize it using a view-reduce function.
 * How to re-create a deleted document ?
 * .attach() method uses `_attachments` property of the document to add
-  attachments. For some reason this one fails at the server with message, [<PRE
+  attachments. For some reason this one fails at the server with message, <br>
+  [<PRE
     ServerError:
     (500, (u'doc_validation', u'Bad special document member: _attachments'))
   >]

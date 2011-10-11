@@ -1,12 +1,12 @@
-CouchDB is a NoSQL database management system. Its official wiki explains
+CouchDB is a NoSQL database management system. Its official wiki explain
 itself as,
 
 * A document database server, accessible via a RESTful JSON API.
 * Ad-hoc and schema-free with a flat address space.
 * Distributed, featuring robust, incremental replication with
   bi-directional conflict detection and management.
-* Query-able and index-able, featuring a table oriented
-  reporting engine that uses JavaScript as a query language.
+* Query-able and index-able, featuring a table oriented reporting engine that
+  uses JavaScript as a query language.
 
 CouchPy is programmatic interface in python for CouchDB database management
 systems. Apart from providing a programmatic access, it also provides data
@@ -17,26 +17,60 @@ learnt from relational database systems.
 h4. Client instance
 
 Interfacing with CouchDB server begins with a client instance, and every
-subsequent access starts from there.
+subsequent access proceeds from there.
 
 {{{ Code pycon
+>>> from couchpy.client import Client
 >>> couch = Client() # Create a client object,
 }}}
 
 Get a list of all available database names,
+
 {{{ Code pycon
 >>> couch.all_dbs()
 [ '_users', 'sessions', 'bootdb' ]
 }}}
 
-Iterate over all databases in the server, returns a list of
-:class:`couchpy.database.Database` objects,
+Iterate over all database in the server, returns a list of
+//couchpy.database.Database// objects,
+
 {{{ Code pycon
 >>> [ db for db in couch ]
 [ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
 }}}
 
-Get :class:`couchpy.database.Database` object as a dictionary key from client,
+h4. Authentication
+
+There are few CouchDB APIs that mandate administrative privileges, CouchDB can
+even be configured to avoid //anonymous// access to server. In such cases, user
+credential is expected for client access. One way to provide the credential
+is by embedding them in the HTTP URI (since CouchDB provide APIs via HTTP).
+Another way is to use session-based authentication, which can be done with
+CouchPy like,
+
+{{{ Code pycon
+>>> couch.login( 'admin', 'admin' )
+( 200,
+  <httplib.HTTPMessage instance at 0xb70dbe2c>,
+  {u'name': None, u'ok': True, u'roles': [u'_admin']}
+)
+>>> couch.authsession()     # Fetch information about the authenticated session
+{ u'info': {u'authenticated': u'cookie',
+  u'authentication_db': u'_users',
+  u'authentication_handlers': [u'oauth', u'cookie', u'default']},
+  u'ok': True,
+  u'userCtx': {u'name': u'admin', u'roles': [u'_admin']}
+}
+>>> couch.logout()          # When done, logout
+}}}
+
+Note that, once login() is called on a client instance, it will be remembered
+until logout() is called.
+
+h4. Database access
+
+Get //couchpy.database.Database// object as a dictionary value from client,
+
 {{{ Code pycon
 >>> usersdb = couch['_users']
 >>> couch['sessions']
@@ -44,12 +78,24 @@ Get :class:`couchpy.database.Database` object as a dictionary key from client,
 }}}
 
 Database operations,
+
 {{{ Code pycon
->>> c.put('blog')                       # Create database
-<Databse 'blog'>
->>> c.Database('blog')                  # Get the Database instance
-<Databse 'blog'>
->>> c.delete( 'blog' )                  # Delete database
->>> c.has_database( 'blog' )            # Check whether database is present
+>>> couch.put('blog')                       # Create database
+<Database u'blog'>
+>>> couch.Database('blog')                  # Get the Database instance
+<Database u'blog'>
+>>> couch.has_database( 'blog' )            # Check whether database is present
 True
+>>> couch.delete( 'blog' )                  # Delete database
+>>> couch.has_database( 'blog' )
+False
+}}}
+
+Create documents in database
+
+{{{ Code pycon
+>>> db = couch.Database( 'blog' )
+>>> db.put( 'fish-recipe' ) # Create an empty document `fish-recipe` as its `_id`
+<Document 'fish-recipe'>
+>>> doc = db.Document( 'fish-recipe' )
 }}}

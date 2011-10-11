@@ -1,5 +1,79 @@
 {{ Toc( float='right' ) }}
 
+h3. Overview
+
+CouchPy is programmatic interface in python for CouchDB database management
+systems. Apart from providing a programmatic access, it also provides data
+modelling, querying, creating views, and MVCS features. If you are new to
+NoSQL way of building database, you might have to forego some of the ideas
+learnt from relational database systems.
+
+h3. Installation
+
+Installing via package management
+
+{{{ Code bash
+  # -U to upgrade install
+  easy_install -U couchpy
+}}}
+
+''Source code''
+
+Download the latest tar.gz from http://pypi.python.org/pypi/couchpy
+
+Check out from bazaar repository,
+{{{ Code bash
+  hg clone https://prataprc@code.google.com/p/couchpy/
+}}}
+
+h3. Development
+
+It is always better to setup the development tree under a virtual environemnt.
+To begin with, first checkout the source tree from the latest repository tree
+and then use the ''make'' command to create a development environment.
+
+{{{ Code sh
+  cd couchpy
+  make develop
+}}}
+
+which,
+* sets-up a virtual environment under // couchpy-env/ // directory.
+* Installs couchpy under the virtual environment in development mode,
+  [<PRE python ./setup.py develop >]
+
+To start using the couchpy package, enter the virtual environment by doing,
+``{c} source ./couchpy-env/bin/activate ``
+
+''To create egg packages'',
+
+{{{ Code bash
+  make bdist_egg        # For creating binary distribution
+  make sdist            # For creating source distribution
+}}}
+
+The .egg package will be availabe under dist/ directory
+
+''To test the package'',
+
+{{{ Code bash
+  source couchpy-env/bin/activate
+  make testall
+}}}
+
+''Finally, Build the egg and upload it into pypi''
+
+{{{ Code bash
+  make upload
+}}}
+
+''Create sphinx documentation and upload the same into python-package index.''
+
+{{{ Code bash
+  make sphinxdoc
+  make upload-doc
+}}}
+
 -----
 
 {{{ Nested 
@@ -7,4 +81,3 @@
 Document edited using Vim <br>
 /* vim: set filetype=etx : */
 }}}
-

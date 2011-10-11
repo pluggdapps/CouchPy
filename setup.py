@@ -8,7 +8,10 @@ import os
 import re
 
 here = abspath(dirname(__file__))
-README = open(join(here, 'README.rst')).read()
+try :
+    README = open(join(here, 'README.rst')).read()
+except :
+    README = ''
 
 v = open(join(dirname(__file__), 'couchpy', '__init__.py'))
 version = re.compile(r".*__version__[ ]*=[ ]*'(.*?)'", re.S).match(v.read()).group(1)

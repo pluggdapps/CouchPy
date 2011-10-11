@@ -66,7 +66,7 @@ class ReSTful( object ) :
     def _jsonloads( self, hdr, data ) :
         if 'application/json' in hdr.get( 'content-type', '' ) :
             val = data.getvalue()
-            data = val and JSON().decode( val ) or ''
+            data = JSON().decode( val ) if val else ''
         return data
 
     def _httpsession( self ):
@@ -182,7 +182,7 @@ class ReSTful( object ) :
     #---- Helper methods for couchpy modules that are related to framing HTTP
     #---- request.
 
-    def mixinhdrs( self, *hthdrs ) :
+    def mixinhdrs( self, *hthdrs ):
         newhthdrs = dict()
         [ newhthdrs.update(h) for h in hthdrs ]
         return newhthdrs
@@ -219,7 +219,7 @@ class ReSTful( object ) :
             return inquery
 
 
-def urljoin( base, *paths, **kwargs ) :
+def urljoin( base, *paths, **kwargs ):
     """Assemble a uri based on a base-url, any number of path segments
     ``paths``, and query key-word argument ``_query``, which is a list of
     key,value tuples.  Each path-segment in ``paths`` will be quoted using
@@ -258,7 +258,7 @@ def urljoin( base, *paths, **kwargs ) :
     url = '?'.join([ url, _urlencode(params) ]) if params else url
     return url
 
-def _extract_credentials( url ) :
+def _extract_credentials( url ):
     """Extract authentication (user name and password) credentials from the
     given URL.
     
@@ -280,16 +280,16 @@ def _extract_credentials( url ) :
         credentials = None
     return urlunsplit(parts), credentials
 
-def _quote( s, safe='' ) :
+def _quote( s, safe='' ):
     s = s.encode('utf-8') if isinstance( s, unicode ) else s
     return urllib.quote(s, safe)
 
-def _urlencode( data ) :
+def _urlencode( data ):
     data = data.items() if isinstance(data, dict) else data
     fn = lambda v : v.encode('utf-8') if isinstance(v, unicode) else v
     params = [ (name, fn(value)) for name, value in data ]
     query = '&'.join([ '%s=%s'%(k,v) for k, v in  params ])
     return urllib.quote(query, '&=\'"')
 
-def data2json( data ) :
+def data2json( data ):
     return JSON().encode( data or {} )

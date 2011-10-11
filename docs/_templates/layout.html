@@ -4,12 +4,24 @@
 {{ super() }}
 <link rel="stylesheet" type="text/css"
  href="{{ pathto('_static/paste.css') }}">
+<style type="text/css">
+  body {
+    margin : 0 auto;
+    max-width : 1100px;
+    min-width : 900px;
+    line-height: 1.3em;
+    font-family : arial,sans-serif;
+    word-spacing: 1px;
+    background-color : #FFF;
+  }
+</style>
 {% endblock %}
 
 {% block sidebartoc %}
-<h3><a href="http://couchpy.pluggdapps.com/" class="invisible-link">CouchPy</a></h3>
-
+<h3>CouchPy</h3>
 <ul>
+  <li> <a href="http://couchpy.pluggdapps.com/" class="invisible-link">Home</a></li>
+  <li> <a href="http://couchpy.pluggdapps.com/dev/readme" class="invisible-link">Development</a></li>
 </ul>
 
 {{ super() }}

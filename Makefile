@@ -4,14 +4,16 @@ develop :
 	bash -c "source couchpy-env/bin/activate ; python ./setup.py develop"
 
 testall :
+	cd couchpy/test/; python ./testjson.py
 	cd couchpy/test/; python ./test_client.py
 	cd couchpy/test/; python ./test_database.py
+	cd couchpy/test/; python ./test_doc.py
 
 bdist_egg :
 	python ./setup.py bdist_egg
 
 upload : 
-	python ./setup.py bdist_egg register upload --show-response 
+	python ./setup.py sdist register -r http://www.python.org/pypi upload -r http://www.python.org/pypi --show-response 
 	
 sdist :
 	python ./setup.py sdist

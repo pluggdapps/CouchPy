@@ -1,5 +1,3 @@
-include AUTHORS
-include RELEASE
 include docs/CHANGELOG
 include docs/LICENSE
 include docs/README
