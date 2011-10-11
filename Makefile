@@ -12,12 +12,20 @@ testall :
 bdist_egg :
 	python ./setup.py bdist_egg
 
-upload : 
-	python ./setup.py sdist register -r http://www.python.org/pypi upload -r http://www.python.org/pypi --show-response 
-	
 sdist :
+	cp CHANGELOG docs/CHANGELOG
+	cp LICENSE docs/LICENSE
+	cp README docs/README
+	cp ROADMAP docs/ROADMAP
 	python ./setup.py sdist
 
+upload : 
+	cp CHANGELOG docs/CHANGELOG
+	cp LICENSE docs/LICENSE
+	cp README docs/README
+	cp ROADMAP docs/ROADMAP
+	python ./setup.py sdist register -r http://www.python.org/pypi upload -r http://www.python.org/pypi --show-response 
+	
 sphinxdoc :
 	rm -rf docs/_build
 	bash -c "source couchpy-env/bin/activate; cd docs ; make html"
