@@ -31,7 +31,7 @@ sphinxdoc :
 	bash -c "source couchpy-env/bin/activate; cd docs ; make html"
 
 upload-doc :
-	python setup.py upload_sphinx
+	python ./setup.py upload_sphinx -r http://www.python.org/pypi 
 
 cleanall : clean cleandoc
 	rm -rf couchpy-env

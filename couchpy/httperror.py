@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2009 Christopher Lenz
-# Copyright (C) 2010 Pratap Chakravarthy
+# Copyright (C) 2011 Pratap Chakravarthy
 
 # -*- coding: utf-8 -*-
 

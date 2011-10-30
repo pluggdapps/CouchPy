@@ -1,6 +1,9 @@
 Rlease check-list 
 -----------------
 
+* `defaultconfig` under couchpy/__init__.py must be consistent with
+  docs/config.etx document. Must also be consistent with pluggdapps-bootstrap
+  definition of couchpy config parameters.
 * Change the release version in 
     ./CHANGELOG,
     ./couchpy/__init__.py

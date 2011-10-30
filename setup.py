@@ -1,6 +1,6 @@
 # This file is subject to the terms and conditions defined in
 # file 'LICENSE', which is part of this source code package.
-#       Copyright (c) 2010 SKR Farms (P) LTD.
+#       Copyright (c) 2011 SKR Farms (P) LTD.
 
 from   setuptools    import setup, find_packages
 from   os.path       import abspath, dirname, join
@@ -62,6 +62,7 @@ setup(
     install_requires=[                      # setuptools
         'pygments',
         'sphinx',
+        'sphinx-pypi-upload',
     ],
     extras_require={},                      # setuptools
     setup_requires={},                      # setuptools

@@ -1,18 +1,6 @@
-# CouchPy Couchdb data-modeling for CouchDB database management systems
-#   Copyright (C) 2011  SKR Farms (P) LTD
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#       Copyright (c) 2011 SKR Farms (P) LTD.
 
 # -*- coding: utf-8 -*-
 
@@ -326,8 +314,8 @@ class Client( object ) :
         self.pyconfig.update( pyconfig or {} )
 
         self.url = url or self.pyconfig['realm']
-        cookie and self.conn.savecookie( self.hthdrs, cookie )
         self.conn = rest.ReSTful(self.url, HttpSession(), headers=self.hthdrs)
+        cookie and self.conn.savecookie( self.hthdrs, cookie )
 
         self.paths = []
         self.available = None       # assume that server is not available

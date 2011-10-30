@@ -3,3 +3,8 @@ Track the project at,
 
 * Copying local-documents to existing documents seem to raise resource
   conflict error. Check up !!
+
+* Start uploading sphinx-doc to pypi for every release.
+
+* Config parameters must follow ConfigDict similar to bootstrap-configuration
+  definition, must completely adhere to mod:eazytext of bootstrap config.

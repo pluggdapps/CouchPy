@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# This file is subject to the terms and conditions defined in
+# file 'LICENSE', which is part of this source code package.
+#       Copyright (c) 2011 SKR Farms (P) LTD.
+
 import optparse, sys, pprint, logging
 from   couchpy.client import Client
 
