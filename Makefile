@@ -44,6 +44,10 @@ clean :
 	rm -rf build;
 	rm -rf dist;
 	rm -rf couchpy.egg-info;
+	rm -rf docs/CHANGELOG
+	rm -rf docs/LICENSE
+	rm -rf docs/README
+	rm -rf docs/ROADMAP
 	rm -rf `find ./ -name "*.pyc"`;
 	rm -rf `find ./ -name "yacctab.py"`;
 	rm -rf `find ./ -name "lextab.py"`;
