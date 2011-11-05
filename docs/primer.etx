@@ -10,7 +10,7 @@ itself as,
 
 CouchPy is programmatic interface in python for CouchDB database management
 systems. Apart from providing a programmatic access, it also provides data
-modelling, querying, creating views, and MVCS features. If you are new to
+modelling, querying, creating views, and MVCC features. If you are new to
 NoSQL way of building database, you might have to forego some of the ideas
 learnt from relational database systems.
 
