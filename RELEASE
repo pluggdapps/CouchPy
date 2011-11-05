@@ -1,13 +1,9 @@
 Rlease check-list 
 -----------------
 
-* `defaultconfig` under couchpy/__init__.py must be consistent with
-  docs/config.etx document. Must also be consistent with pluggdapps-bootstrap
-  definition of couchpy config parameters.
 * Change the release version in 
     ./CHANGELOG,
     ./couchpy/__init__.py
-* Synchronize CHANGELOG, README, LICENSE, ROADMAP with docs/*
 * Update setup.py and MANIFEST.in for release
 * Create a tag and push the tagged branch to google code.
 * Upload the source into pypi.
