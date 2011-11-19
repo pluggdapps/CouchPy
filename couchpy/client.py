@@ -4,7 +4,7 @@
 
 # -*- coding: utf-8 -*-
 
-""":class:`Client` implements required client interface for a CouchDB
+""":class:`Client` implements the client interface for a CouchDB
 server. Aside from this, :class:`Client` instance provide pythonified way of
 accessing the database systems, for example, a :class:`Client` instance behave
 like a dictionary of databases. A :class:`Client` constructor typically takes
@@ -23,31 +23,32 @@ Check for server availability,
 >>> bool( couch )
 True
 
-Get server information,
+To get server information,
 
 >>> couch()
 { "couchdb" : "Welcome", "version" : "<version>" }
 
-Get active tasks in DB server, (required admin privileges)
+Get list of all available database names,
 
->>> couch.active_tasks()
-[]
+>>> couch.all_dbs()
+[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
+
+Or, iterate over all databases in the server, obtaining a list of 
+:class:`couchpy.database.Database` objects,
+
+>>> [ db for db in couch ]
+[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
 
 Number of databases present in the server,
 
 >>> len(couch)
 3
 
-Get a list of all available database names,
+Get or Delete a database (python style).
 
->>> couch.all_dbs()
-[ '_users', 'sessions', 'bootdb' ]
-
-Iterate over all databases in the server, returns a list of 
-:class:`couchpy.database.Database` objects,
-
->>> [ db for db in couch ]
-[ <Database u'sessions'>, <Database u'bootdb'>, <Database u'_users'> ]
+>>> couch['bootdb']
+<Database u'bootdb'>
+>>> del couch['bootdb']
 
 Check whether a database is present,
 
@@ -57,12 +58,6 @@ True
 True
 >>> 'contacts' in couch
 False
-
-Get :class:`couchpy.database.Database` object as a dictionary key from client,
-
->>> usersdb = couch['_users']
->>> couch['sessions']
-<Database 'sessions'>
 
 Get server statistics,
 
@@ -75,7 +70,7 @@ Get a list of 2 univerally unique IDs, the count argument is optional.
 [ u'a0cf4956301a349a0ecc99370e74331e', u'93e4ec906703b7a00abbfd46b46425fb' ]
 
 
-Operations that require admin privileges :
+**Operations that require admin privileges :**
 
 Restart couchdb server instance,
 
@@ -135,7 +130,7 @@ from   httpc            import HttpSession, OK, ACCEPTED
 from   httperror        import *
 from   couchpy          import hdr_acceptjs, hdr_ctypejs, hdr_ctypeform, \
                                hdr_accepttxtplain, hdr_acceptany, \
-                               __version__, defconfig
+                               __version__, defaultconfig
 
 # TODO :
 #   1. Deleteing configuration section/key seems to have some complex options.
@@ -295,25 +290,26 @@ class Client( object ) :
 
     ``url``,
         Server http url.
-    ``pyconfig``,
+    ``config``,
         Configuration parameters.
     ``hthdrs``,
         Dictionary of HTTP request headers, remembered at the instance
-        level.  Aside from these headers, if a method supports `hthdrs` key-word
-        argument, it will be used (overriding ``hthdrs``) for a
-        single call.
+        level. All http-requests made via this instance will use ``hthdrs``
+        for request headers. Aside from these headers, if an instance method
+        supports ``hthdrs`` key-word argument, it will override instance-level
+        request-headers.
     ``cookie``
-        cookie value for authenticated sessions. Value can be ``basestring`` or
-        cookie.SimpleCookie object.
+        cookie value for authenticated sessions. Value can be of type
+        ``basestring`` or cookie.SimpleCookie object.
     """
 
-    def __init__( self, url=None, pyconfig=None, hthdrs=None, cookie=None ) :
+    def __init__( self, url=None, config=None, hthdrs=None, cookie=None ) :
         self.hthdrs = hthdrs or {}
         self.cookie = cookie
-        self.pyconfig = dict( defconfig.items() )
-        self.pyconfig.update( pyconfig or {} )
+        self.defconfig = dict( defaultconfig.items() )
+        self.defconfig.update( config or {} )
 
-        self.url = url or self.pyconfig['realm']
+        self.url = url or self.defconfig['realm']
         self.conn = rest.ReSTful(self.url, HttpSession(), headers=self.hthdrs)
         cookie and self.conn.savecookie( self.hthdrs, cookie )
 
@@ -326,47 +322,15 @@ class Client( object ) :
     #---- Pythonification of instance methods. They are supposed to be
     #---- wrappers around the actual API.
 
-    def __contains__( self, name ) :
-        """Return ``True`` if database ``name`` is present, else ``False``. Refer
-        :func:`Client.has_database`
-        """
-        return self.has_database(name)
-
-    def __iter__( self ) :
-        """Iterate over all databases available in the server. Each iteration
-        yields :class:`couchpy.database.Database` instance corresponding to
-        a database in the server. Refer :func:`Client.all_dbs`
-        """
-        return self.DatabaseIterator()
-
-    def __len__( self ) :
-        """Return the count of database available in the server."""
-        return len(self.all_dbs())
-
     def __nonzero__( self ) :
         """If returns ``True``, then the server is available. This is essentially
         a one time check to know whether the database instance pointed by
-        `realm` is available. Subsequent checks will simply return the
+        ``server-url`` is available. Subsequent checks will simply return the
         remembered status.  To make a fresh request for server availability use,
         :func:`Client.ispresent` method."""
         if self.available == None :
             self.available = self.ispresent()
         return self.available
-
-    def __repr__( self ) :
-        return '<%s %r>' % (type(self).__name__, self.url)
-
-    def __delitem__( self, name ) :
-        """Remove database ``name`` from server. Refer :func:`Client.delete`
-        method.
-        """
-        return self.delete(name)
-
-    def __getitem__( self, name ) :
-        """Return a :class:`couchpy.database.Database` instance for database,
-        ``name``. Refer :func:`Client.database` method
-        """
-        return self.Database(name)
 
     def __call__( self ) :
         """Check whether CouchDB instance is alive and return the welcome
@@ -382,6 +346,38 @@ class Client( object ) :
         conn, paths = self.conn, self.paths
         s, h, d = _getsrv( conn, paths, hthdrs=self.hthdrs )
         return d
+
+    def __contains__( self, name ) :
+        """Return ``True`` if database ``name`` is present, else ``False``. Refer
+        :func:`Client.has_database`
+        """
+        return self.has_database(name)
+
+    def __iter__( self ) :
+        """Iterate over all database available in the server. Each iteration
+        yields :class:`couchpy.database.Database` instance corresponding to
+        a database in the server. Refer :func:`Client.all_dbs`
+        """
+        return self.DatabaseIterator()
+
+    def __len__( self ) :
+        """Return the count of database available in the server."""
+        return len(self.all_dbs())
+
+    def __repr__( self ) :
+        return '<%s %r>' % (type(self).__name__, self.url)
+
+    def __delitem__( self, name ) :
+        """Remove database ``name`` from server. Refer :func:`Client.delete`
+        method.
+        """
+        return self.delete(name)
+
+    def __getitem__( self, name ) :
+        """Return a :class:`couchpy.database.Database` instance for database,
+        ``name``. Refer :func:`Client.Database` method
+        """
+        return self.Database(name)
 
 
     #---- API methods for Database Management System
@@ -417,7 +413,7 @@ class Client( object ) :
           ....
         ]
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         conn, paths = self.conn, (self.paths + [ '_active_tasks' ])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -428,9 +424,8 @@ class Client( object ) :
         """Return a list of all the databases as
         :class:`couchpy.database.Database` objects from the CouchDB server.
 
-        Admin-Prev, No
+        ``Admin-Prev, No``
         """
-        from   database     import Database
         conn, paths = self.conn, (self.paths + [ '_all_dbs' ])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
         s, h, d = _all_dbs( conn, paths, hthdrs=hthdrs )
@@ -447,7 +442,7 @@ class Client( object ) :
         ``offset``,
             Offset in bytes where the log tail should be started.
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         conn, paths = self.conn, (self.paths + ['_log'])
         q = {}
@@ -457,18 +452,12 @@ class Client( object ) :
         s, h, d = _log( conn, paths, hthdrs=hthdrs, **q )
         return d.getvalue() if s == OK else None
 
-    #def log( self, bytes=None, offset=None, hthdrs={} ) :
-    #    """Returns a log iterator that can be used to iterate over the list of
-    #    log messages.
-    #    """
-    #    return Log( self, bytes=bytes, offset=offset )
-
     def restart( self, hthdrs={} ) :
-        """Restart the CouchDB instance. You must be authenticated as a user
-        with administrative privileges for this to work. Returns a Boolean,
+        """Restart CouchDB server instance. You must be authenticated as admin
+        user with administrative privileges for this to work. Returns a Boolean,
         indicating success or failure
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         conn, paths = self.conn, (self.paths + [ '_restart' ])
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -476,9 +465,9 @@ class Client( object ) :
         return d['ok'] if (s==OK) else False
 
     def stats( self, *paths, **kwargs ) :
-        """Return a JSON converted object containting the statistics for this
+        """Return a JSON converted object containing statistics from
         CouchDB server. The object is structured with top-level sections
-        collating the statistics for a range of entries, with each individual
+        collating statistics for a range of entries, with each individual
         statistic being easily identified, and the content of each statistic
         is self-describing.  You can also access individual statistics by
         passing ``statistics-section`` and ``statistic-id`` as positional
@@ -493,7 +482,7 @@ class Client( object ) :
                                       'stddev': 29.754999999999999,
                                       'sum': 1265.6880000000001} } }
 
-        Admin-Prev, No
+        ``Admin-Prev, No``
         """
         conn, paths = self.conn, (['_stats'] + list(paths))
         hthdrs = conn.mixinhdrs( self.hthdrs, kwargs.get('hthdrs', {}) )
@@ -502,7 +491,8 @@ class Client( object ) :
 
     def uuids( self, count=None, hthdrs={} ) :
         """Return ``count`` number of uuids, generated by the server. These uuid
-        can be used to compose document ids.
+        can be used to compose document ids. Refer to CouchDB API manual to
+        know more about UUIDs.
         """
         q =  { 'count' : count } if isinstance(count, (int,long)) else {}
         conn, paths = self.conn, (self.paths + ['_uuids'])
@@ -531,10 +521,10 @@ class Client( object ) :
         To delete a particular section/key supply ``delete=True`` keyword
         argument.
 
-        Returns nested dict. of configuration name and value pairs, organized by
-        section.
+        Returns nested dictionary of configuration name and value pairs,
+        organized by section.
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         paths = []
         paths.append( section ) if section != None else None
@@ -556,35 +546,32 @@ class Client( object ) :
     def addadmin( self, name, password ) :
         """Create a server admin by name ``name`` with ``password``.
         
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         self.config( section='admins', key=name, value=password )
 
     def deladmin( self, name ) :
         """Delete server admin user ``name``
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         self.config( section='admins', key=name, delete=True )
 
     def admins( self ) :
         """List of admin user
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         return self.config( section='admins' )
 
     def login( self, username, password, hthdrs={} ) :
-        """Login with ``username`` and ``password``, uses session-cookie for
-        authentication, so preserve the following cookie for subsequent
-        request.
+        """Login with ``username`` and ``password``. Uses session-cookie for
+        authentication. Cookie is remembered on this client's instance and
+        will be used for all subsequent request to CouchDB server, until
+        a :func:`Client.logout` method. is called.
 
         Returns a tuple of (status, header, payload) from HTTP response,
         header contains the cookie information if the login was successful,
-        this cookie can be preserved to make authenticated request to the DB
-        server.
-        Authentication cookie is remembered for all subsequent request via
-        this client instance.
         """
         if self.cookie : 
             log.warn( 'Client already authenticated (%s)' % self.cookie )
@@ -634,38 +621,37 @@ class Client( object ) :
         :class:`couchpy.database.Database` object representing the created
         database.
 
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         return self.Database(name, hthdrs=hthdrs).put()
 
     def delete( self, db, hthdrs={} ) :
-        """Delete the database ``db``, which can be passed as a instance of
+        """Delete database ``db``, which can be passed as an instance of
         :class:`couchpy.database.Database` class or as database-name.
         
-        Admin-Prev, Yes
+        ``Admin-Prev, Yes``
         """
         ( self.Database(db) if isinstance( db, basestring ) else db 
         ).delete( hthdrs=hthdrs )
         return None
 
     def has_database( self, name, hthdrs={} ) :
-        """Return whether the server contains a database with the specified
-        ``name``. Return, ``True`` if a database with the ``name`` exists,
-        ``False`` otherwise
+        """Return a boolean, indicating whether database ``name`` is available
+        on the server.
 
-        Admin-Prev, No
+        ``Admin-Prev, No``
         """
         return self.Database(name).ispresent()
 
     def Database( self, name, *args, **kwargs ):
         """Convenience method to access the Database class under the context
-        of the client instance.
+        of this client instance.
         Return a :class:`couchpy.database.Database` object representing the
-        database with the specified ``name``.
+        database ``name``.
 
-        Admin-Prev, No
+        ``Admin-Prev, No``
         """
-        from   database     import Database
+        from  database  import Database
         return Database( self, name, *args, **kwargs )
 
     def DatabaseIterator( self, regexp=None ):
@@ -674,12 +660,11 @@ class Client( object ) :
 
 
     def commit( self ):
-        """ -- TBD -- This is part multi-document access design, which is still
-        evolving.
+        """ -- TBD -- This is part of multi-document access design, which is
+        still evolving.
 
         Call to this method will bulk commit all the active documents
         (dirtied) under every open database for this client.
-
         """
         [ db.commit() for dbname, db in self.opendbs.items() ]
 

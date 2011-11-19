@@ -16,22 +16,22 @@ class ReSTful( object ) :
     """ReST-ful (Representational State Transfer) interface to CouchDB server.
     Uses a httpclient session and provides method APIs for rest of the
     couchpy modules. If http-header ``Accept`` has only ``application/json`` as
-    the value, then reponse data will be converted from json to python
-    object.
+    the value, then reponse data will automatically be converted from json to
+    python object.
 
     Constructor arugments,
 
     ``url``, 
-        base url to be used to compose the full resource-url. url can contain
+        base url to be used to compose full resource-url. `url` can contain
         credential information as <username>:<password>
     ``htsess``,
         HttpSession object for clientside connection. If not supplied, a
         new instance will be created and remembered until this instance gets
         garbage-collected.
     ``headers``,
-        dictionary of http-headers that will be used for all http-request
+        Dictionary of http-headers that will be used for all http-request
         made my this object. The header fields supplied here are overridable
-        in method APIs.
+        via method APIs (in Client, Database and Document instances).
     """
 
     def __init__( self, url, htsess, headers=None ) :

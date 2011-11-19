@@ -1,16 +1,17 @@
-       /    fetch()      | aget()    \                    /ST_ACTIVE_INVALID
-      /     post()       | aput()     \                  / ST_ACTIVE_POST
-Events      put()        | adelete()   Events      States  ST_ACTIVE_VALID
-      \     delete()     |            /                  \ ST_ACTIVE_DIRTY
-       \  side-effects() | attach()  /                    \ST_CACHE_INVALID
+       /ST_ACTIVE_INVALID      |  I - instansiate()
+      / ST_ACTIVE_POST         |  C - post(),
+States  ST_ACTIVE_VALID        |  R - fetch(), attach.get(), attach.attach()
+      \ ST_ACTIVE_DIRTY        |  U - put(), side-effects(), attach.put(), attach.delete()
+       \ST_CACHE_INVALID       |  D - delete()
+
 
 ST_ACTIVE_INVALID :
-    Document is instantiated but cannot be used until it is fetched from the
+    Document is instantiated, but cannot be used until it is fetched from the
     server. Either the latest revision needs to be fetched or one of its
     previous revision needs to be fetched.
 
 ST_ACTIVE_POST :
-    Document is instantiated to freshly insert into the database, using a
+    Document is freshly instantiated, insert the document into database using a
     post() call.
 
 ST_ACTIVE_VALID :

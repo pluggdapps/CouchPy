@@ -4,9 +4,9 @@ h3. 0.1dev ``{k-} on Fri 2011-10-11``
 
 * Support for all CouchDB HTTP server APIs.
 * Access database and documents in python way.
-* JSON documents modelled as native python objects.
+* JSON documents modeled as native python objects.
 * State-machine CRUD operations on Documents.
-* Lookup views in design-documents and query them.
+* Look up views in design-documents and query them.
 
 -----
 

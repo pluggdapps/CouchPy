@@ -6,7 +6,7 @@
 
 """CouchDB is a document database and documents are stored in JSON format.
 Fortunately, JSON formated objects can easily be converted to native python
-objects. :class:`couchpy.database.Document` class defines a collection of
+objects. :class:`Document` class defines a collection of
 attributes and methods to access CouchDB documents.
 
 >>> c = Client()
@@ -27,15 +27,15 @@ Fetch document,
 >>> revs = Document( db, doc, revs=True )          # Fetch revision list
 >>> revsinfo = Document( db, doc, revs_info=True ) # Fetch extended revisions
 
-:class:`couchpy.doc.Document` object is a dictionary mapping for JSON
+:class:`Document` object is a dictionary mapping for JSON
 document's (key,value) pair.
 
 >>> doc['tag'] = 'seafood'      # Create / update a new field 
 >>> doc['tag']                  # Access key, value pair
 seafood
 
-And there is a convinience feature to access document keys as
-:class:`couchpy.doc.Document` object attributes. But nested dictionaries are
+And there is a convenience feature to access document keys as
+:class:`Document` object attributes. But nested dictionaries are
 accessed using dictionary-access syntax.
 
 >>> doc._id                     # Document ID
@@ -55,7 +55,7 @@ Manage document attachments,
 >>> doc.attachs()                                 # Get a list of Attachment objects
 >>> a = doc.attach( 'recipe.txt' )
 >>> a.filename                                    # Attachment filename 
-receipe.txt
+recipe.txt
 >>> a.data()
 ( ... file content ..., text/plain )
 >>> doc.delattach( a )                            # Delete attachment
@@ -209,76 +209,84 @@ ST_EVENT_ADELETE    = 109    # document attach.delete() call
 ST_EVENT_ATTACH     = 110    # document attach() call
 
 class StateMachine( object ):
-    """State-machine for every document that is ever instantiated. Operations
-    on document are abstracted into events and the document moves from one
-    state to another based on events. Our purpose is to make sure that,
+    """State-machine for every document that is ever instantiated on the
+    :class:`couchpy.database.Database` object. CRUD operations on document
+    object are abstracted into events and the document moves from one state
+    to another based on events. Our purpose is to make sure that,
 
-    * when ever a :class:`couchpy.doc.Document` is instantiated in the same
-      :class:`couchpy.database.Database` context, the same Document object must
-      be emitted (singleton design pattern).
+    * when ever a :class:`Document` is instantiated in the same
+      :class:`couchpy.database.Database` context, the same `document` object
+      must be emitted (singleton design pattern).
     * Typically during a web-request, a document might go through several
       side-effects. By having a clear state-machine, it is easier for couchpy
       to track the side-effects, optimize on server access and catch bugs.
 
     The following special attributes are used on the document instance (ofcourse
-    they are not persisted in server)
+    they are not persisted in server and the special attributes start with
+    `_x`)
     
-    * _x_state, document state, can be one of,
-      ST_ACTIVE_INVALID, ST_ACTIVE_VALID, ST_ACTIVE_DIRTY, ST_ACTIVE_POST,
-      ST_CACHE_INVALID
-    * _x_smach, an instance of :class:`couchpy.doc.StateMachine`
-    * _x_init, boolean indicates a fresh instance of
-      :class:`couchpy.doc.Document`
-    * _x_reinit, boolean indicates that already a
-      :class:`couchpy.doc.Document` instance for this ``_id`` is in one of the
-      active state.
-    * _x_paths, list of path segements point to CouchDB's document url.
+    * `_x_smach`, an instance of :class:`StateMachine`
+    * `_x_state`, document state, can be one of,
+      `ST_ACTIVE_INVALID`, `ST_ACTIVE_VALID`, `ST_ACTIVE_DIRTY`,
+      `ST_ACTIVE_POST`, `ST_CACHE_INVALID`.
+    * `_x_init`, boolean indicates a fresh instance of
+      :class:`Document` is being created.
+    * `_x_reinit`, boolean indicates that already a
+      :class:`Document` instance for this ``_id`` is in one of the
+      active state, but needs to be presented as a freshly instantiated 
+      object.
+    * `_x_conn`, :class:`couchpy.rest.ReSTful` object.
+    * `_x_db`, :class:`couchpy.database.Database` object where document is
       stored.
-    * _x_conn, :class:`couchpy.rest.ReSTful` object.
-    * _x_hthdrs, dictionary of http request headers to be used for document
+    * `_x_paths`, list of path segments pointing to CouchDB's document url.
+    * `_x_hthdrs`, dictionary of http request headers to be used for document
       access.
-    * _x_query, query params like ``rev``, ``revs``, ``revs_info``.
-    * _x_db, :class:`couchpy.database.Database` object where document is
-      stored.
+    * `_x_query`, query params like ``rev``, ``revs``, ``revs_info``.
     """
     def __init__( self, doc ):
         self.doc = doc
+
+    def canCreate( self, doc ):
+        """A global check that can be used by anyone to figure out whether a
+        create operation is allowed on the document.
+        """
+        return True if doc._x_state == ST_ACTIVE_POST else False
+
+    def canUpdate( self, doc ):
+        """A global check that can be used by anyone to figure out whether an
+        update operation is allowed on the document.
+        """
+        return True if doc._x_state == ST_ACTIVE_DIRTY else False
+
+    def isDirty( self ):
+        """Check wether the document is in modified state."""
+        return self.doc._x_state == ST_ACTIVE_DIRTY
 
     def handle_event( self, event, *args, **kwargs ):
         """Entry point to handle a document event."""
         return self.events[event]( self, *args, **kwargs )
 
-    def is_allowed( self, event, doc ):
-        """A global check that can be used by anyone to figure out whether a
-        particular operation is allowable in the current document's state and
-        then commit the operation.
-        """
-        s = doc._x_state
-        if event == ST_EVENT_POST and s == ST_ACTIVE_POST :
-            return True
-        if event == ST_EVENT_PUT and s == ST_ACTIVE_DIRTY :
-            return True
-        return False
-
-    def is_dirty( self ):
-        """Check wether the document is in modified state."""
-        return self.doc._x_state == ST_ACTIVE_DIRTY
+    # Event handlers
 
     def event_instan( self, *args, **kwargs ):          # ST_EVENT_INSTAN
-        db, _doc  = args[0:2]
-        doc, singleton = self.doc, db.singleton_docs
+        """Event handler to handle document instantiation.
+
+        * args[0] is `db`, args[1] is `doc`.
+        * Manage document in `active pool` or `cache pool` in the database's
+          context.
+        * Fresh instances will be moved to ST_ACTIVE_POST and added to 
+          `active pool`, provided the document has an `_id` attribute.
+        * Instances in ST_CACHE_INVALID will be moved to `active pool`.
+        * Can there be a situation where document state is uninitialized and
+          document _id not available ?
+        """
+        doc, singleton = self.doc, args[0].singleton_docs
         _x_state = getattr( doc, '_x_state', None )
+        _id = args[1] if isinstance(args[1], basestring) else args[1].get('_id', None)
 
-        if isinstance(_doc, basestring) :
-            _id, _rev = _doc, None
-        else :
-            _id, _rev = _doc.get('_id', None), _doc.get('_rev', None)
-
-        if _x_state == None :
-            doc._x_init = True
-            if _id :
-                singleton['active'][_id] = doc
-            newstate = ST_ACTIVE_POST
+        if _x_state == None :   # Fresh document
+            doc._x_init, newstate = True, ST_ACTIVE_POST
+            singleton['active'].setdefault( _id, doc ) if _id else None
 
         if _id :
             if _x_state == ST_CACHE_INVALID :       # `cache` to `active`
@@ -289,12 +297,21 @@ class StateMachine( object ):
             newstate = _x_state or newstate
         else :
             newstate = ST_ACTIVE_POST
+
         doc._x_state = newstate
 
     def event_invalidate( self, doc ):                  # ST_EVENT_INVALIDATE
+        """Move the document to ST_ACTIVE_INVALID state."""
         doc._x_state = ST_ACTIVE_INVALID
 
     def event_side_effect( self, doc ):                 # ST_EVENT_SIDEEFF
+        """Side effects created on the document.
+        
+        * Move document to ST_ACTIVE_DIRTY state or maintain current state
+          if it is already in ST_ACTIVE_DIRTY or ST_ACTIVE_POST.
+        * If document is in ST_ACTIVE_INVALID state, it will first be fetched
+          before moving it to dirty state.
+        """
         _x_state = doc._x_state
         if _x_state == ST_ACTIVE_INVALID :
             doc.fetch()
@@ -304,22 +321,33 @@ class StateMachine( object ):
         elif _x_state in [ ST_ACTIVE_DIRTY, ST_ACTIVE_POST ] :
             newstate = _x_state
         elif _x_state == ST_CACHE_INVALID :
-            raise Exception( 'Side effects not allowed in CACHE_INVALID state' )
+            raise Exception('Side effects not allowed in CACHE_INVALID state')
         doc._x_state = newstate
 
     def event_fetch( self, doc, dbdoc ):                # ST_EVENT_FETCH
-        """ST_ACTIVE_POST is included for fetch() event"""
-        _x_state = doc._x_state
-        if _x_state in [ ST_ACTIVE_INVALID, ST_ACTIVE_VALID, ST_ACTIVE_POST ] :
-            doc.clear( _x_dirty=False )
+        """If document is already in ST_ACTIVE_INVALID, ST_ACTIVE_VALID or
+        ST_ACTIVE_POST, the document will be updatd with newly fetched ``dbdoc``
+        which is the JSON converted document in python dictionary form and
+        moved to ST_ACTIVE_VALID state.
+        
+        Otherwise the document will stay in the same state.
+        """
+        if doc._x_state in [ST_ACTIVE_INVALID, ST_ACTIVE_VALID, ST_ACTIVE_POST]:
+            doc.clear( special=True, _x_dirty=False )
             doc.update( dbdoc, _x_dirty=False )
             newstate = ST_ACTIVE_VALID
         else :
-            err = 'Cannot fetch dirtied documents / cached documents'
-            raise Exception( err )
+            raise Exception( 'Cannot fetch dirtied / cached documents' )
         doc._x_state = newstate
 
     def event_post( self, doc, d ):                     # ST_EVENT_POST
+        """If document is already in ST_ACTIVE_POST state, and move document
+        to ST_ACTIVE_VALID (if latest revision is available via server
+        response) else ST_ACTIVE_INVALID (if otherwise). Positional argument
+        ``d`` is a dictionary corresponding to server response.
+
+        If successful, document will be saved in `active-pool`.
+        """
         _x_state = doc._x_state
         if _x_state == ST_ACTIVE_POST :
             doc.update( _id=d['id'] ) if 'id' in d else None
@@ -334,6 +362,12 @@ class StateMachine( object ):
         doc._x_state = newstate
 
     def event_put( self, doc, d ):                      # ST_EVENT_PUT
+        """If document is in ST_ACTIVE_DIRTY state, and positional
+        argument ``d`` is a dictionary of JSON response from server commiting
+        document successfully in the database, then, document is moved to
+        ST_ACTIVE_VALID state if `rev` is present in ``d`` otherwise to
+        ST_ACTIVE_INVALID.
+        """
         _x_state = doc._x_state
         if _x_state == ST_ACTIVE_DIRTY :
             if 'rev' in d :
@@ -342,30 +376,44 @@ class StateMachine( object ):
             else :
                 newstate = ST_ACTIVE_INVALID
         else :
-            err = 'Document cannot be updated, may be no changes made'
-            raise Exception( err )
+            raise Exception('Document cannot be updated, no changes made ?')
         doc._x_state = newstate
 
     def event_delete( self, doc, d ):                   # ST_EVENT_DELETE
+        """If document is in one of the valid state, ST_ACTIVE_VALID,
+        ST_ACTIVE_INVALID, ST_ACTIVE_POST, and positional argument ``d``
+        is a dictionary of JSON response from server after deleting ``doc``
+        from database, then document is moved to ST_ACTIVE_INVALID state. The
+        document will also be removed from `active-pool` and `cache-pool`
+        """
         _x_state = doc._x_state
         db = doc._x_db
         if _x_state in [ ST_ACTIVE_VALID, ST_ACTIVE_INVALID, ST_ACTIVE_POST ] :
-            doc.update( _rev=d['rev'], _x_dirty=False )
+            doc.update( _rev=d['rev'], _x_dirty=False ) if 'rev' in d else None
             db.singleton_docs['active'].pop(doc._id) # Neiher active nor cached
         else :
             raise Exception( 'Document cannot be deleted' )
+        doc._x_state = ST_ACTIVE_INVALID
 
     def event_attach( self, doc ):                      # ST_EVENT_ATTACH
+        """Make sure that attachments are added only for new document. Does not
+        change document state.
+        """
         _x_state = doc._x_state
         if _x_state != ST_ACTIVE_POST :
             raise Exception('_attachments can be added only for new documents')
 
     def event_aget( self, doc ):                        # ST_EVENT_AGET
+        """Attachments can be fetched only for documents that are in one of
+        the following state, ST_ACTIVE_DIRTY, ST_ACTIVE_INVALID,
+        ST_ACTIVE_VALID. Does not change document state.
+        """
         _x_state = doc._x_state
         if _x_state not in [ST_ACTIVE_DIRTY, ST_ACTIVE_INVALID,ST_ACTIVE_VALID]:
             raise Exception( 'Cannot get attachment for fresh documents' )
 
     def event_aput( self, doc, d ):                     # ST_EVENT_APUT
+        """Commit attachments to existing documents."""
         _x_state = doc._x_state
         if _x_state not in [ST_ACTIVE_POST, ST_CACHE_INVALID ] :
             doc.update( _rev=d['rev'], _x_dirty=False )
@@ -375,9 +423,12 @@ class StateMachine( object ):
             )
 
     def event_adelete( self, doc, d ):                  # ST_EVENT_ADELETE
+        """Delete attachment from document. Does not change document state.
+        """
         _x_state = doc._x_state
         if _x_state not in [ST_ACTIVE_POST, ST_CACHE_INVALID ] :
             doc.update( _rev=d['rev'], _x_dirty=False )
+            doc._x_state = ST_ACTIVE_INVALID
         else :
             raise Exception( 'Cannot delete attachments for fresh documents' )
             
@@ -385,12 +436,12 @@ class StateMachine( object ):
     events = {
         # Document events
         ST_EVENT_INSTAN     : event_instan,
-        ST_EVENT_FETCH      : event_fetch,
         ST_EVENT_POST       : event_post,
+        ST_EVENT_FETCH      : event_fetch,
         ST_EVENT_PUT        : event_put,
-        ST_EVENT_DELETE     : event_delete,
         ST_EVENT_SIDEEFF    : event_side_effect,
         ST_EVENT_INVALIDATE : event_invalidate,
+        ST_EVENT_DELETE     : event_delete,
         # Doc attachment events
         ST_EVENT_ATTACH     : event_attach,
         ST_EVENT_AGET       : event_aget,
@@ -403,21 +454,19 @@ class Document( dict ) :
     """Document modeling.
 
     Instantiate python representation of a CouchDB document. The resulting
-    object is essentially a dictionary class. ``db`` should be a
+    object is essentially a dictionary class. ``db`` should be
     :class:`couchpy.database.Database` object, while ``doc`` can be one of the
-    following, which will change the behaviour of the instantiation, along
-    with the rest of the arguments. If ``rev`` keyword argument is not passed,
+    following, which will change the behavior of instantiation, along
+    with rest of the arguments. If ``rev`` keyword argument is not passed,
     then latest document's revision will be fetched from the server.
 
     ``doc`` can be ``_id`` string,
 
-        if ``_id`` field is present but ``_rev`` field is not present, then it
-        in which case, document may or may not be present in the database.
+        In which case, document may or may not be present in the database.
         Unless otherwise a fetch() is done on the document object, it will be
         assumed as a fresh document to be inserted into database. Doing a
-        subsequent post :func:`couchpy.doc.Document.post` will create a new
-        document and doing a :func:`couchpy.doc.Document.fetch` will fetch the
-        latest document revision.
+        subsequent post :func:`Document.post` will create a new document and
+        doing a :func:`Document.fetch` will fetch the latest document revision.
 
 
     ``doc`` can be dictionary,
@@ -431,14 +480,14 @@ class Document( dict ) :
         may or may not be present in the database. Unless otherwise a fetch()
         is done on the document object, it will be assumed as a fresh document
         to be inserted into database. Doing a subsequent post
-        :func:`couchpy.doc.Document.post` will create a new document
-        and doing a :func:`couchpy.doc.Document.fetch` will fetch the latest
-        document revision.
+        :func:`Document.post` will create a new document or doing a 
+        :func:`Document.fetch` will fetch the latest document revision.
 
         If both ``_id`` and ``_rev`` keys are not present, then the document
         instance is presumed as a fresh document which needs to be created.
-        The actual creation happens when :func:`couchpy.doc.Document.post`
-        method is called, with its document ``_id`` automatically generated.
+        The actual creation happens when :func:`Document.post` method is called,
+        with its document ``_id`` automatically generated and updated into
+        this object (long with its revision).
 
     ``doc`` with ``rev`` keyword parameter,
         
@@ -469,18 +518,18 @@ class Document( dict ) :
         learn more about the structure of the returned object, refer to ``GET
         /<db>/<doc>`` in CouchDB API manual.
 
-    Admin-prev, No
+    ``Admin-prev: No``
     """
 
     def __new__( cls, db, doc, **kwargs ):
         """Document instantiater. If ``_id`` is provided, the singleton object
-        is lookedup from 'active' list or 'cached' list. If doc is not
-        present, a new :class:`couchpy.doc.Document` is instantiated which
+        is looked up from 'active' list or 'cached' list. If doc is not
+        present, a new :class:`Document` is instantiated which
         will be saved in the 'active' list of the document `_id` is available.
         Sometimes, while creating a new document, the caller may not provide
-        the `_id` value (DB will autogenerate the ID). In those scenarios, the
+        the `_id` value (DB will auto generate the ID). In those scenarios, the
         document instance will be added to the 'active' list after a
-        :func:`couchpy.doc.Document.post` method is called.
+        :func:`Document.post` method is called.
         """
         activedocs = db.singleton_docs['active']
         cacheddocs = db.singleton_docs['cache']
@@ -490,7 +539,7 @@ class Document( dict ) :
         # Instantiate document's older revision, ImmutableDocument.
         if _id and 'rev' in kwargs :
             self = dict.__new__( ImmutableDocument, db, doc, **kwargs )
-            self.__init__( db, doc, **kwargs ) # ImmutableDocument constructor
+            ImmutableDocument.__init__( self, db, doc, **kwargs )
             return self
 
         if _id and _id in activedocs :      # Document is active
@@ -508,8 +557,10 @@ class Document( dict ) :
         return self
 
     def __init__( self, db, doc, hthdrs={}, **query ) :
-        doc = {'_id' : doc} if isinstance(doc, basestring) else doc
-        _id = doc.get( '_id', None )
+        if isinstance(doc, basestring) :
+            _id, doc = doc, {'_id' : doc} 
+        else :
+            _id, doc = doc.get('_id', None), doc
         _x_init = getattr(self, '_x_init', None)
         _x_reinit = getattr(self, '_x_reinit', None)
         if _x_init == True :
@@ -536,13 +587,13 @@ class Document( dict ) :
     def invalidate( self ):
         """If by other means, it is found that the document is no longer the
         latest version (i.e) the database base version has moved forward, then
-        programmatically invalidate this document so that a side-effect
+        programmatic-ally invalidate this document so that a side-effect
         operation will fetch them afresh from the database.
         """
         self._x_smach.handle_event(ST_EVENT_INVALIDATE, self)
 
-    def is_dirty( self ):
-        return self._x_smach.is_dirty()
+    def isDirty( self ):
+        return self._x_smach.isDirty()
 
     #---- Dictionary methods that create side-effects
 
@@ -554,7 +605,10 @@ class Document( dict ) :
             raise AttributeError( 'accessing %r' % name )
 
     def __setattr__( self, name, value ) :
-        """Set document values as attributes to this instance"""
+        """Set document values as attributes to this instance. Attributes
+        starting with `_x_` will be treated as special attributes and does not
+        map to DB-Document's attribute.
+        """
         if name.startswith('_x_') :
             self.__dict__[name] = value
         else :
@@ -562,36 +616,69 @@ class Document( dict ) :
         return value
 
     def __setitem__(self, key, value) :
-        """Intercept dictionary updates (which are updates to the document as
-        well) and mark the dirty fields.
+        """Update DB-Document's attributes as attributes of this object. Don't
+        forget to call :func:`Document.put` later.
         """
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         dict.__setitem__( self, key, value )
 
     def __delitem__( self, key ) :
         """Delete key,value pair identified by ``key``. Python shortcut for
-        :func:`Document.delitem` also mark them for later commit"""
+        :func:`Document.delitem`. Don't forge to call :func:`Document.put`
+        later.
+        """
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.__delitem__( self, key )
 
-    def clear( self, _x_dirty=True ):
+    def clear( self, special=False, _x_dirty=True ):
+        """Clear all attributes of the document. Equivalent of deleteing all
+        key's in this document object's dictionary.
+
+        ``special``,
+            Boolean, indicating whether to delete the special attributes that
+            start with **_** which are normally interpreted by CouchDB.
+            Of-course there is no sense it trying to delete `_id` or `_rev`
+            attributes.
+
+        Don't forget to call :func:`Document.put` method later.
+        """
         self._x_smach.handle_event(ST_EVENT_SIDEEFF, self) if _x_dirty else None
-        return dict.clear( self )
+        _id, _rev = self.get('_id', None), self.get('_rev', None)
+        specattrs = dict([
+                        (k,v) for k,v in self.items() if k[0] == '_'
+                    ]) if special == False else {}
+        rc = dict.clear(self) 
+        self.update( specattrs, _x_dirty=_x_dirty ) if specattrs else None
+        self.update( _id=_id, _x_dirty=_x_dirty )   if _id else None
+        self.update( _rev=_rev, _x_dirty=_x_dirty ) if _rev else None
+        return rc
 
     def update( self, *args, **kwargs ):
+        """Maps to update() method of dictionary type. Don't forget to call
+        :func:`Document.put` method later.
+        """
         _x_dirty = kwargs.pop( '_x_dirty', True )
         self._x_smach.handle_event(ST_EVENT_SIDEEFF, self) if _x_dirty else None
         return dict.update( self, *args, **kwargs )
 
     def setdefault( self, key, *args ):
+        """Maps to setdefault() method of dictionary type. Don't forget to
+        call :func:`Document.put` method later.
+        """
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.setdefault( self, key, *args )
 
     def pop( self, key, *args ):
+        """Maps to pop() method of dictionary type. Don't forget to
+        call :func:`Document.put` method later.
+        """
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.pop( self, key, *args )
 
     def popitem( self ):
+        """Maps to popitem() method of dictionary type. Don't forget to
+        call :func:`Document.put` method later.
+        """
         self._x_smach.handle_event( ST_EVENT_SIDEEFF, self )
         return dict.popitem( self )
 
@@ -617,7 +704,7 @@ class Document( dict ) :
             of this document. An immutable version of document
             (ImmutableDocument) will be returned.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         doc = dict( self.items() )
         return type(self)( self._x_db, doc, hthdrs=hthdrs, **query )
@@ -648,9 +735,9 @@ class Document( dict ) :
             A string value of either ``true`` or ``false``.
 
         Return HTTP response header, the latest revision of the document is
-        available as Etag value in response header.
+        available as ETag value in response header.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
@@ -659,19 +746,19 @@ class Document( dict ) :
 
     def post( self, hthdrs={}, **query ):
         """POST method on this document. To create or insert a new document into
-        the database, create an instance of :class:`couchpy.doc.Document`
+        the database, create an instance of :class:`Document`
         without specifying the `_rev` field and call this `post` method on the
-        instance. If `_id` is not provided, CouchDB will autogenerate an id
-        value for the document. New documents are not created until a call is
-        made to this method.
+        instance. If `_id` is not provided, CouchDB will auto generate an id
+        value for the document and updated into this dictionary as well.
+        New documents are not created until a call is made to this method.
 
         Optional keyword parameters,
 
         ``hthdrs``,
-            HTTP headers for this HTTP request.
+            Dictionary of HTTP headers for this HTTP request.
 
         ``batch``,
-            if specified 'ok', allow document store request to be batched
+            If specified 'ok', allow document store request to be batched
             with others. When using the batch mode, the document instance will
             not be updated with the latest revision number. A `fetch()` call
             is required to get the latest revision of the document.
@@ -679,19 +766,23 @@ class Document( dict ) :
         Return the document with its `_rev` field updated to the latest
         revision number, along with the `_id` field.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
-        if self._x_smach.is_allowed( ST_EVENT_POST, self ) == False :
+        if self._x_smach.canCreate( self ) == False :
             raise Exception( 'post() not allowed !!' )
 
         conn, paths = self._x_conn, self._x_paths
         # Prune away the document ID from url path. POST will crib on that.
-        if paths[-1] == self.get( '_id', None ) :
+        if paths and ( paths[-1] == self.get('_id', None) ) :
             paths = paths[:-1]
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
         doc = dict( self.items() )
         s, h, d = _postdoc( conn, doc, paths, hthdrs=hthdrs, **query )
         self._x_smach.handle_event( ST_EVENT_POST, self, d ) if d else None
+        # If document's path lacks {_id} segment, append one if available.
+        _id = self.get('_id', None)
+        if _id and self._x_paths and ( self._x_paths[-1] != _id ) :
+            self._x_paths.append(  _id )
         return self
 
     def fetch( self, hthdrs={}, **query ):
@@ -702,7 +793,7 @@ class Document( dict ) :
         Optional keyword parameters,
 
         ``hthdrs``,
-            HTTP headers for this HTTP request.
+            Dictionary of HTTP headers for this HTTP request.
 
         ``revs``,
             A string value of either ``true`` or ``false``. If ``true``,
@@ -712,9 +803,9 @@ class Document( dict ) :
             A string value of either ``true`` or ``false``. If ``true``,
             get the document with a list of extended revision information.
 
-        Return this document object.
+        Return this document object (useful for chaining calls).
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
@@ -741,9 +832,9 @@ class Document( dict ) :
         Return the document with its `_rev` field updated to the latest
         revision number.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
-        if self._x_smach.is_allowed( ST_EVENT_PUT, self ) == False :
+        if self._x_smach.canUpdate( self ) == False :
             raise Exception( 'put() is allowed only on dirtied document !!' )
 
         conn, paths = self._x_conn, self._x_paths
@@ -765,14 +856,13 @@ class Document( dict ) :
 
         Return None.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         rev = rev or self['_rev']
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
         s, h, d = _deletedoc( conn, paths, hthdrs=hthdrs, rev=rev )
-        if d and 'rev' in d :
-            self._x_smach.handle_event( ST_EVENT_DELETE, self, d )
+        self._x_smach.handle_event( ST_EVENT_DELETE, self, d ) if d else None
         return None
 
     def copy( self, toid, asrev=None, hthdrs={} ) :
@@ -800,8 +890,8 @@ class Document( dict ) :
             return None
 
     def attach( self, filepath, content_type=None ):
-        """Add files to document before posting it (creating the document),
-        something like this
+        """Use this method in conjuction with post(), that is for documents
+        that are newly created. Something like,
 
         >>> doc = db.Document( db, { '_id' : 'FishStew' } )
         >>> doc.attach( '/home/user/readme.txt' ).post()
@@ -889,9 +979,9 @@ class Attachment( object ) :
     """Represents a single attachment file present in the document, allows
     operations like put / get / delete of the attachment file under the
     document. Note that these methods are applicable only for documents that
-    are already inserted (created) in the database.
-    :class:`couchpy.doc.Attachment` object must be instantiated under a
-    :class:`couchpy.doc.Document` context. The natural way to do that is,
+    are already inserted (created) in the database. That is,
+    :class:`Attachment` object must be instantiated under a
+    :class:`Document` context. The natural way to do that is,
 
     >>> doc = db.Document( db, { '_id' : 'FishStew' } ).fetch()
     >>> doc.Attachment( filepath='/home/user/readme.txt' ).put()
@@ -906,9 +996,9 @@ class Attachment( object ) :
     in the database. Optionally, ``content_type`` can be provided as key-word
     argument.
     
-    Return :class:`couchpy.doc.Attachment` object.
+    Return :class:`Attachment` object.
 
-    Admin-prev, No
+    ``Admin-prev: No``
     """
 
     def __init__( self, doc, hthdrs={}, filename=None, filepath=None, **fields ):
@@ -926,7 +1016,7 @@ class Attachment( object ) :
         self.hthdrs.update({ 'Content-Type' : self.content_type })
         self.data and self.hthdrs.update({ 'Content-Length' : len(self.data) })
 
-    def get( self, hthdrs={} ) :
+    def get( self, hthdrs={} ):
         """GET attachment from database. Attributes like, `file_name`,
         `content_type`, `data` are available on this object.
 
@@ -935,7 +1025,7 @@ class Attachment( object ) :
         ``hthdrs``,
             HTTP headers for this HTTP request.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -957,7 +1047,7 @@ class Attachment( object ) :
         ``hthdrs``,
             HTTP headers for this HTTP request.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -977,7 +1067,7 @@ class Attachment( object ) :
         ``hthdrs``,
             HTTP headers for this HTTP request.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self.conn, self.paths
         hthdrs = conn.mixinhdrs( self.hthdrs, hthdrs )
@@ -991,14 +1081,15 @@ class Attachment( object ) :
 #---- Local documents
 
 class LocalDocument( dict ) :
-    """Local documents have the following limitations:
-        * Local documents are not replicated to other databases.
-        * The ID of the local document must be known to access the document.
-          You cannot obtain a list of local documents from the database.
-        * Local documents are not output by views, or the _all_docs API.
+    """
+    Local documents have the following limitations:
+    * Local documents are not replicated to other databases.
+    * The ID of the local document must be known to access the document.
+      User cannot obtain a list of local documents from the database.
+    * Local documents are not output by views, or the _all_docs API.
 
-    Note that :class:`couchpy.doc.LocalDocument` class is not derived from
-    :class:`couchpy.doc.Document` class, it is derived from builtin ``dict``.
+    Note that :class:`LocalDocument` class is not derived from :class:`Document`
+    class, it is derived from built-in ``dict``.
 
     Optional keyword arguments:
 
@@ -1018,7 +1109,7 @@ class LocalDocument( dict ) :
         document. To learn more about the structure of the returned object,
         refer to ``GET /<db>/<doc>`` in CouchDB API manual
 
-    Admin-prev, No
+    ``Admin-prev: No``
     """
 
     def __init__( self, db, doc, hthdrs={}, **query ) :
@@ -1069,7 +1160,7 @@ class LocalDocument( dict ) :
             When fetching, return the local document for the requested
             revision.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         doc = dict( self.items() )
         return self._x_db.LocalDocument( self, doc, hthdrs=hthdrs, **query )
@@ -1093,7 +1184,7 @@ class LocalDocument( dict ) :
 
         Return this document object.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
@@ -1120,7 +1211,7 @@ class LocalDocument( dict ) :
         Return the document with its `_rev` field updated to the latest
         revision number.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
@@ -1143,7 +1234,7 @@ class LocalDocument( dict ) :
 
         Return None.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         rev = rev or self['_rev']
@@ -1183,8 +1274,8 @@ class LocalDocument( dict ) :
 class ImmutableDocument( dict ):
     """Immutable version of document objects, the document must be specified
     with `_id` and `_rev`. Users cannot change or modify the document
-    contents. Unlike the :class:`couchpy.doc.Document` objects, only
-    :func:`couchpy.doc.ImmutableDocument.fetch` method is available.
+    contents. Unlike the :class:`Document` objects, only
+    :func:`ImmutableDocument.fetch` method is available.
 
     Optional keyword arguments,
 
@@ -1279,7 +1370,7 @@ class ImmutableDocument( dict ):
 
         Returns this document object.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         conn, paths = self._x_conn, self._x_paths
         q = {}
@@ -1306,7 +1397,7 @@ def _infosgn( conn, paths=[], hthdrs={} ) :
 
 
 class DesignDocument( Document ):
-    """Derived from :class:`couchpy.doc.Document` class, encapsulates a design
+    """Derived from :class:`Document` class, encapsulates a design
     document stored in database. Initialization, creation and other operations
     are exactly similar to that of normal documents, except for the following
     additional details.
@@ -1328,7 +1419,7 @@ class DesignDocument( Document ):
         ``hthdrs``,
             HTTP headers for this HTTP request.
 
-        Admin-prev, Yes
+        ``Admin-prev: Yes``
         """
         conn, paths = self._x_conn, self._x_paths
         hthdrs = conn.mixinhdrs( self._x_hthdrs, hthdrs )
@@ -1336,18 +1427,18 @@ class DesignDocument( Document ):
         return d
 
     def views( self ):
-        """Return :class:`couchpy.doc.Views` dictionary."""
+        """Return :class:`Views` dictionary."""
         return Views( self, self['views'], hthdrs=self._x_hthdrs )
 
 
 class Views( dict ) :
     """Dictionary of views defined in design document ``doc``. This object
-    will be automatically instatiated by :func:`couchpy.doc.DesignDocument.views`
+    will be automatically instantiated by :func:`DesignDocument.views`
     method. Each view definition inside the design document is abstracted
-    using :class:`couchpy.doc.View`, which can be obtained from this
+    using :class:`View`, which can be obtained from this
     dictionary as,
 
-    >>> designdoc = db.DesignDocument( 'userprog' ).fetch()
+    >>> designdoc = db.DesignDocument( 'userviews' ).fetch()
     >>> userviews = designdoc.views()
     >>> userviews['bypincode']
     """
@@ -1408,43 +1499,44 @@ class View( object ) :
     the functions defined by this class are,
     
     * To allow user to query the view represented by this object. 
-    * To construct :class:`couchpy.doc.Document` and
-      :class:`couchpy.doc.ImmutableDocument` objects based on the view's
+    * To construct :class:`Document` and
+      :class:`ImmutableDocument` objects based on the view's
       return structures.
-    * Create clones of this object with pre-initialized query parameters.
+    * Create clones of this view object with pre-initialized query parameters.
 
     ``doc``,
         design-document containing this view definition logic.
     ``viewname``,
         name of this view, without the ``_view/`` prefix.
     ``hthdrs``,
-        HTTP headers for all HTTP request made via this class instance.
+        Dictionary of HTTP headers for all HTTP request made via this class
+        instance. It will override ``hthdrs`` defined for the ``doc`` object.
     ``q``
-        A fresh set of query parameters as a dictionary or
-        :class:`couchpy.doc.Query` instance. The query parameters are
-        explained in detail in :class:`couchpy.doc.Query`.
+        A new set of query parameters as a dictionary or :class:`Query`
+        instance. The query parameters are explained in detail in :class:`Query`.
     """
 
     def __init__( self, doc, viewname, view, hthdrs={}, q={} ):
         self.doc, self.viewname, self.view = doc, viewname, view
-        self.conn     = doc._x_conn
-        self.paths    = doc._x_paths + [ '_view', viewname ]
-        self.hthdrs   = doc._x_conn.mixinhdrs( doc._x_hthdrs, hthdrs )
-        self.query    = Query( _q=q ) if isinstance( q, dict ) else q
+        self.conn = doc._x_conn
+        self.paths = doc._x_paths + [ '_view', viewname ]
+        self.hthdrs = doc._x_conn.mixinhdrs( doc._x_hthdrs, hthdrs )
+        self.query = Query( _q=q ) if isinstance( q, dict ) else q
 
     def __call__( self, hthdrs={}, _q={}, **params ):
         """Create a clone of this view object with a different set of query
-        parameters. A fresh instance obtained via :class:`couchpy.doc.Views`
+        parameters. A fresh instance obtained via :class:`Views`
         does not contain any query parameters.
 
         Optional key-word arguments,
 
         ``hthdrs``,
-            HTTP headers to be used for all request via cloned object.
+            Dictionary of HTTP headers to be used for all request via cloned
+            object.
         ``_q``,
-            a dictionary containing new set of query parameters to be remembered
+            Dictionary containing new set of query parameters to be remembered
             in the cloned object. The query parameters are explained in detail
-            in :class:`couchpy.doc.Query`.
+            in :class:`Query`.
         ``**params``
             query parameters to be updated with existing set of query
             parameters from the cloned object.
@@ -1460,16 +1552,16 @@ class View( object ) :
             If is None, then all the documents in the view index will be
             fetched.
         ``hthdrs``
-            HTTP headers for this HTTP request.
+            Dictionary of HTTP headers for this HTTP request.
         ``query``
-            A new set of query parameters as dictionary or
-            :class:`couchpy.doc.Query` instance. The query parameters are
-            explained in detail in :class:`couchpy.doc.Query`.
+            A new set of query parameters as dictionary or :class:`Query`
+            instance. The query parameters are explained in detail in
+            :class:`Query`.
         ``params``
             A dictionary of query parameters to be updated on the existing query
             dictionary for this request.
 
-        Admin-prev, No
+        ``Admin-prev: No``
         """
         if query :
             query = query

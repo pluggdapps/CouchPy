@@ -15,32 +15,33 @@ hdr_acceptany      = { 'Accept' : '*/*' }
 hdr_ctypejs   = { 'Content-Type' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
 
-defconfig = ConfigDict()
-defconfig['realm']             = {
+defaultconfig = ConfigDict()
+defaultconfig.__doc__ = """Configuration settings for CouchDB"""
+defaultconfig['realm']             = {
     'default' : 'http://localhost:5984',
     'types'   : (str,),
     'help'    : "CouchDB HTTP-API URL. A single couchdb instance is considered "
                 "as a realm."
 }
-defconfig['userdb.name']       = {
+defaultconfig['userdb.name']       = {
     'default' : '_users',
     'types'   : (str,),
     'help'    : "CouchDB user database for authentication and other user "
                 "administration"
 }
-defconfig['couch_httpd_auth.timeout']  = {
+defaultconfig['couch_httpd_auth.timeout']  = {
     'default' : 10000000,
     'types'   : (int,),
     'help'    : "How long authenticated session should be preserved before "
                 "timing-out."
 }
-defconfig['uuids.algorithm']   = {
+defaultconfig['uuids.algorithm']   = {
     'default' : 'utc_random',
     'types'   : (str,),
     'help'    : "Algorithm to generate universally unique identifiers for "
                 "documents."
 }
-defconfig['cookie.name']       =  {
+defaultconfig['cookie.name']       =  {
     'default' : 'AuthSession',
     'types'   : (str,),
     'help'    : "Cookie name to store user-authentacation. The name must be "

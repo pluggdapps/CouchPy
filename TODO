@@ -1,6 +1,8 @@
 Track the project at,
     http://couchpy.pluggdapps.com
 
+* Review couchpy.doc module documentation in sourcedoc
+
 * Copying local-documents to existing documents seem to raise resource
   conflict error. Check up !!
 

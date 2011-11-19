@@ -164,22 +164,22 @@ def test_doc( url ) :
     doc = doc.fetch()
     assert 'friend' not in doc
     
-    print "Testing changed(), is_dirty(), invalidate() methods ..."
+    print "Testing changed(), isDirty(), invalidate() methods ..."
     doc = db.Document( 'joe' ).fetch()
     doc.update( friend='akbar', _x_dirty=False )
-    assert doc.is_dirty() == False
+    assert doc.isDirty() == False
     doc.fetch()
     assert 'friend' not in doc
     #----
     doc.update( friend='akbar' )
-    assert doc.is_dirty()
+    assert doc.isDirty()
     doc.put().fetch()
     assert 'friend' in doc
     #----
     doc.changed()
-    assert doc.is_dirty()
+    assert doc.isDirty()
     doc.put()
-    assert doc.is_dirty() == False
+    assert doc.isDirty() == False
     #----
     assert doc._x_state == ST_ACTIVE_VALID
     doc.invalidate()

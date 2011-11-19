@@ -9,7 +9,7 @@ Module Contents
 .. autoclass:: StateMachine
 
 .. autoclass:: Document
-    :members: __new__, __init__, changed, invalidate, is_dirty, __getattr__,
+    :members: __new__, __init__, changed, invalidate, isDirty, __getattr__,
               __setattr__, __setitem__, __delitem__, clear, update, setdefault,
               pop, popitem, __call__, __repr__, head, post, fetch, put, delete,
               copy, attach, attachments, Attachment
