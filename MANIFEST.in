@@ -7,6 +7,7 @@ include docs/CHANGELOG
 include docs/LICENSE
 include docs/README
 include docs/ROADMAP
+include docs/statemachine.txt
 
 recursive-include couchpy *.etx *.css *.js
 recursive-include docs *.etx

@@ -42,7 +42,7 @@ def option_parse() :
                        help='Put (create) database name in server' )
     parser.add_option( '-d', dest='deldb', type="string",
                        default='',
-                       help='Delete database name from server' )
+                       help='Delete databases name from server' )
     parser.add_option( '-u', dest='authsess', action="store_true",
                        default=False,
                        help='Authenticated session information.' )
@@ -77,7 +77,7 @@ if __name__ == '__main__' :
         print "(%s) %s" % (len(dbs), dbs)
     elif options.deldb :
         print "Deleting database %r ..."  % options.deldb
-        client.delete( options.deldb )
+        [ client.delete( x.strip() ) for x in options.deldb.split(',') ]
     elif options.putdb :
         print "Putting database %r ..."  % options.putdb
         client.put( options.putdb )

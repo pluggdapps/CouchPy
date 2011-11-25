@@ -29,17 +29,17 @@ defaultconfig['userdb.name']       = {
     'help'    : "CouchDB user database for authentication and other user "
                 "administration"
 }
-defaultconfig['couch_httpd_auth.timeout']  = {
+defaultconfig['couchdb.couch_httpd_auth.timeout']  = {
     'default' : 10000000,
     'types'   : (int,),
-    'help'    : "How long authenticated session should be preserved before "
-                "timing-out."
+    'help'    : "CouchDB server configuration. How long authenticated session "
+                "should be preserved before timing-out."
 }
-defaultconfig['uuids.algorithm']   = {
+defaultconfig['couchdb.uuids.algorithm']   = {
     'default' : 'utc_random',
     'types'   : (str,),
-    'help'    : "Algorithm to generate universally unique identifiers for "
-                "documents."
+    'help'    : "CouchDB server configuration. Algorithm to generate "
+                "universally unique identifiers for documents."
 }
 defaultconfig['cookie.name']       =  {
     'default' : 'AuthSession',
