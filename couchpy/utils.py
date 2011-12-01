@@ -4,8 +4,6 @@
 
 # -*- coding: utf-8 -*-
 
-from   eazytext             import Translate as ETXTranslate
-
 """Encoding python object to JSON text and decoding JSON text to python object
 using the fastest available implementation. Searches for following
 implementation in the listed order of priority.
