@@ -1,5 +1,11 @@
 {{ Toc( float='right' ) }}
 
+h3. 0.1dev ``{k-} on Thu 2011-12-01``
+
+* Documentation.
+* Code refactoring.
+* Configuration settings.
+
 h3. 0.1dev ``{k-} on Fri 2011-10-11``
 
 * Support for all CouchDB HTTP server APIs.

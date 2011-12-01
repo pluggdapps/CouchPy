@@ -61,7 +61,7 @@ setup(
     },
     install_requires=[                      # setuptools
         'pygments',
-        'sphinx',
+        'Sphinx',
         'sphinx-pypi-upload',
     ],
     extras_require={},                      # setuptools
