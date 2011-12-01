@@ -16,7 +16,7 @@ hdr_ctypejs   = { 'Content-Type' : 'application/json' }
 hdr_ctypeform = { 'Content-Type' : 'application/x-www-form-urlencodeddata' }
 
 defaultconfig = ConfigDict()
-defaultconfig.__doc__ = """Configuration settings for CouchDB"""
+defaultconfig.__doc__ = """Configuration settings for CouchDB module"""
 defaultconfig['realm']             = {
     'default' : 'http://localhost:5984',
     'types'   : (str,),
