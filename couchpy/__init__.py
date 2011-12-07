@@ -7,7 +7,7 @@
 import logging
 from   couchpy.utils     import ConfigDict
 
-__version__ = '0.2dev'
+__version__ = '0.21dev'
 
 hdr_acceptjs  = { 'Accept' : 'application/json' }
 hdr_accepttxtplain = { 'Accept' : 'text/plain' }

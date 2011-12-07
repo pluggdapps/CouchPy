@@ -10,3 +10,6 @@ Track the project at,
 
 * Config parameters must follow ConfigDict similar to bootstrap-configuration
   definition, must completely adhere to mod:eazytext of bootstrap config.
+
+* Test cases / profiling / code-coverage.
+
